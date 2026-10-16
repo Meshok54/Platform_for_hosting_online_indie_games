@@ -6,6 +6,7 @@ import ru.vlsu.myng.services.CustomUserDetailsService;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -40,44 +41,66 @@ public class SecurityConfig {
                                 .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
                                 .csrf(csrf -> csrf.disable())
                                 .addFilterBefore(banFilter, UsernamePasswordAuthenticationFilter.class)
+                                // Правила проверяются сверху вниз, срабатывает первое совпавшее,
+                                // поэтому более узкие правила должны идти раньше широких
                                 .authorizeHttpRequests(authz -> authz
+                                                // Статика, файлы игр и служебные пути
                                                 .requestMatchers(
-                                                                "/",
-                                                                "/auth/**",
-                                                                "/games/**",
-                                                                "/reviews/more/**",
-                                                                "/catalog",
-                                                                "/running-game/**",
                                                                 "/main.css",
+                                                                "/css/**",
+                                                                "/webfonts/**",
                                                                 "/js/**",
                                                                 "/images/**",
-                                                                "/static/gamefiles/**",
-                                                                "/banned",
-                                                                "/catalog/tags/**",
                                                                 "/favicon.ico",
-                                                                "/.well-known/**")
+                                                                "/__myng-storage-patch.js",
+                                                                "/static/gamefiles/**",
+                                                                "/.well-known/**",
+                                                                "/error")
                                                 .permitAll()
 
+                                                // Публичные страницы
                                                 .requestMatchers(
-                                                                "/profile/**",
-                                                                "/profile/*/edit")
-                                                .authenticated()
+                                                                "/",
+                                                                "/index",
+                                                                "/auth",
+                                                                "/auth/**",
+                                                                "/banned",
+                                                                "/catalog",
+                                                                "/catalog/tags/**",
+                                                                "/running-game/**")
+                                                .permitAll()
 
+                                                // Страница игры и подгрузка отзывов доступны всем только на чтение
                                                 .requestMatchers(
-                                                                "/games/new",
+                                                                HttpMethod.GET,
+                                                                "/games/{id:\\d+}",
+                                                                "/reviews/more/**")
+                                                .permitAll()
+
+                                                // Публикация и управление играми
+                                                .requestMatchers(
+                                                                "/games/publish",
+                                                                "/games/publish/**",
                                                                 "/games/*/edit",
-                                                                "/games/*/versions/new")
+                                                                "/games/*/versions/**",
+                                                                "/games/repo-tree",
+                                                                "/games/repo-tree-json")
                                                 .hasAnyRole("DEV", "MOD", "ADMIN")
 
+                                                // Модерация
                                                 .requestMatchers(
-                                                                "/to_moderate/**")
+                                                                "/to-moderate/**",
+                                                                "/mod-item/**")
                                                 .hasAnyRole("MOD", "ADMIN")
 
+                                                // Администрирование
                                                 .requestMatchers(
                                                                 "/user-list/**",
-                                                                "/moderation_log/**")
+                                                                "/moderation-log/**")
                                                 .hasRole("ADMIN")
 
+                                                // Всё остальное (профиль, коллекции, отзывы, уведомления,
+                                                // заявки на разработчика) — только для авторизованных
                                                 .anyRequest().authenticated())
 
                                 .formLogin(form -> form

@@ -25,6 +25,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
@@ -110,6 +112,56 @@ class GithubServiceTest {
 
         assertTrue(finalHtml.contains("<script src=\"/__myng-storage-patch.js\"></script>"),
                 "The patch script inclusion reference tag should be present.");
+    }
+
+    @Test
+    void should_RejectArchive_AndCleanUp_WhenUnpackedSizeExceedsLimit() throws Exception {
+        GithubService target =
+                AopTestUtils.getUltimateTargetObject(githubService);
+
+        ReflectionTestUtils.setField(target, "storagePath", tempStorageDir.toString());
+        ReflectionTestUtils.setField(
+                target,
+                "webClient",
+                WebClient.builder().baseUrl(wireMockServer.baseUrl()).build()
+        );
+
+        Object originalLimit = ReflectionTestUtils.getField(target, "maxUnpackedSize");
+        ReflectionTestUtils.setField(target, "maxUnpackedSize", 1024L);
+
+        try {
+            // 1 МБ одинаковых символов сжимается до пары килобайт — маленькая модель zip-бомбы
+            byte[] bombZip = createMockGithubZip(
+                    "my-repo-bomb123/index.html",
+                    "0".repeat(1024 * 1024)
+            );
+
+            wireMockServer.stubFor(get(urlEqualTo("/repos/my-owner/my-repo/zipball/bomb123"))
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withHeader("Content-Type", "application/zip")
+                            .withBody(bombZip)));
+
+            Game game = new Game();
+            game.setId(8);
+            game.setRepo("https://github.com/my-owner/my-repo");
+
+            GameVersion version = new GameVersion();
+            version.setId(15);
+            version.setCommitHash("bomb123");
+            version.setGame(game);
+            version.setFiles("index.html");
+
+            assertThrows(RuntimeException.class, () -> githubService.downloadGameVersion(version));
+
+            Path targetDir = tempStorageDir.resolve("gamefiles")
+                    .resolve("game_8")
+                    .resolve("ver_15");
+
+            assertFalse(Files.exists(targetDir), "Partially extracted files should be removed");
+        } finally {
+            ReflectionTestUtils.setField(target, "maxUnpackedSize", originalLimit);
+        }
     }
 
     /**

@@ -15,9 +15,14 @@ import reactor.netty.http.client.HttpClient;
 import ru.vlsu.myng.entities.GameVersion;
 import ru.vlsu.myng.utils.GithubException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -51,6 +56,16 @@ public class GithubService {
 
     @Value("${app.storage.path}")
     private String storagePath;
+
+    // Лимиты при скачивании игры из GitHub (защита от zip-бомб)
+    @Value("${app.games.max-archive-size:104857600}")
+    private long maxArchiveSize;
+
+    @Value("${app.games.max-unpacked-size:209715200}")
+    private long maxUnpackedSize;
+
+    @Value("${app.games.max-entries:5000}")
+    private int maxZipEntries;
 
     /**
      * Создаёт экземпляр сервиса с настроенным {@link WebClient}.
@@ -107,7 +122,6 @@ public class GithubService {
      */
     public void validateRepoExists(String repoUrl) {
         String[] parts = extractPath(repoUrl).split("/");
-        System.out.println("GITHUB TOKEN: " + githubToken);
         System.out.println(Arrays.toString(parts));
 
         String owner = parts[0];
@@ -413,17 +427,25 @@ public class GithubService {
 
         System.out.println("Game download target directory: " + targetDir);
 
+        Path zipFile = null;
+
         try {
             Files.createDirectories(targetDir);
 
-            Path zipFile = downloadZip(owner, repo, commit);
+            zipFile = downloadZip(owner, repo, commit);
             extractNeededFiles(zipFile, targetDir, version.getFiles(), version);
 
-            Files.deleteIfExists(zipFile);
-
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Ошибка загрузки файлов из GitHub", e);
+            // не оставляем на диске частично распакованную версию
+            deleteDirectoryQuietly(targetDir);
+            throw new RuntimeException("Ошибка загрузки файлов из GitHub: " + e.getMessage(), e);
+        } finally {
+            if (zipFile != null) {
+                try {
+                    Files.deleteIfExists(zipFile);
+                } catch (IOException ignored) {
+                }
+            }
         }
     }
 
@@ -460,10 +482,13 @@ public class GithubService {
      * @return путь к временному ZIP-файлу.
      *
      * @throws IOException если произошла ошибка при создании или записи файла
+     * @throws IllegalStateException если архив больше {@code app.games.max-archive-size}
      */
     private Path downloadZip(String owner, String repo, String commit) throws IOException
     {
         Path tempFile = Files.createTempFile("repo-", ".zip");
+
+        AtomicLong downloaded = new AtomicLong();
 
         Flux<DataBuffer> flux = webClient.get()
                 .uri("/repos/{owner}/{repo}/zipball/{commit}",
@@ -471,10 +496,26 @@ public class GithubService {
                     repo,
                     commit)
                 .retrieve()
-                .bodyToFlux(DataBuffer.class);
+                .bodyToFlux(DataBuffer.class)
+                // прерываем скачивание, как только архив превысил лимит
+                .handle((buffer, sink) -> {
+                    if (downloaded.addAndGet(buffer.readableByteCount()) > maxArchiveSize) {
+                        DataBufferUtils.release(buffer);
+                        sink.error(new IllegalStateException(
+                                "Архив репозитория превышает допустимый размер ("
+                                        + toMegabytes(maxArchiveSize) + " МБ)"));
+                    } else {
+                        sink.next(buffer);
+                    }
+                });
 
-        DataBufferUtils.write(flux, tempFile)
-                .block();
+        try {
+            DataBufferUtils.write(flux, tempFile)
+                    .block();
+        } catch (RuntimeException e) {
+            Files.deleteIfExists(tempFile);
+            throw e;
+        }
 
         return tempFile;
     }
@@ -499,6 +540,8 @@ public class GithubService {
      * <p>
      * Безопасность: проверяется, что извлечённые файлы не выходят
      * за пределы целевой директории (защита от Zip Slip атаки).
+     * Также ограничиваются количество записей в архиве и суммарный
+     * размер распакованных файлов (защита от zip-бомб).
      * </p>
      *
      * @param zipPath   путь к ZIP-архиву.
@@ -507,7 +550,7 @@ public class GithubService {
      * @param version   версия игры (для формирования патча).
      *
      * @throws IOException если произошла ошибка при чтении архива
-     *         или записи файлов
+     *         или записи файлов, а также при превышении лимитов распаковки
      * @throws RuntimeException если обнаружен некорректный путь в архиве
      *         (возможная Zip Slip атака)
      */
@@ -516,11 +559,18 @@ public class GithubService {
                 .map(s -> s.replaceAll("^/+", "").replaceAll("/+$", ""))
                 .toList();
 
+        long totalUnpacked = 0;
+        int entryCount = 0;
+
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipPath))) {
 
             ZipEntry entry;
 
             while ((entry = zis.getNextEntry()) != null) {
+
+                if (++entryCount > maxZipEntries) {
+                    throw new IOException("В архиве слишком много файлов (больше " + maxZipEntries + ")");
+                }
 
                 String fullPath = entry.getName();
 
@@ -547,20 +597,81 @@ public class GithubService {
                     Files.createDirectories(normalized);
                 } else {
                     Files.createDirectories(normalized.getParent());
+
+                    // размер записи в заголовке zip можно подделать, поэтому
+                    // считаем реально распакованные байты
+                    long remaining = maxUnpackedSize - totalUnpacked;
+
                     if (relativePath.endsWith("index.html")) {
 
-                        String html = new String(zis.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        ByteArrayOutputStream htmlBytes = new ByteArrayOutputStream();
+                        totalUnpacked += copyLimited(zis, htmlBytes, remaining);
+
+                        String html = htmlBytes.toString(java.nio.charset.StandardCharsets.UTF_8);
 
                         html = injectIntoHead(html, buildPatch(version));
 
                         Files.writeString(normalized, html, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
                     } else {
-                        Files.copy(zis, normalized, StandardCopyOption.REPLACE_EXISTING);
+                        try (OutputStream out = Files.newOutputStream(normalized)) {
+                            totalUnpacked += copyLimited(zis, out, remaining);
+                        }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Копирует данные из потока, прерываясь при превышении лимита.
+     *
+     * @param in    входной поток (текущая запись zip-архива).
+     * @param out   выходной поток.
+     * @param limit максимально допустимое количество байт.
+     *
+     * @return количество скопированных байт.
+     *
+     * @throws IOException если данных больше, чем {@code limit}
+     */
+    private long copyLimited(InputStream in, OutputStream out, long limit) throws IOException {
+        byte[] buffer = new byte[8192];
+        long copied = 0;
+        int read;
+
+        while ((read = in.read(buffer)) != -1) {
+            copied += read;
+
+            if (copied > limit) {
+                throw new IOException("Распакованные файлы игры превышают допустимый размер ("
+                        + toMegabytes(maxUnpackedSize) + " МБ)");
+            }
+
+            out.write(buffer, 0, read);
+        }
+
+        return copied;
+    }
+
+    private void deleteDirectoryQuietly(Path dir) {
+        if (!Files.exists(dir)) {
+            return;
+        }
+
+        try (Stream<Path> paths = Files.walk(dir)) {
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException ignored) {
+                        }
+                    });
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static long toMegabytes(long bytes) {
+        return bytes / (1024 * 1024);
     }
 
     /**
