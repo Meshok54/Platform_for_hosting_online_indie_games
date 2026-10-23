@@ -2,15 +2,18 @@ package ru.vlsu.myng.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.vlsu.myng.dto.PublishGameVersionRequest;
 import ru.vlsu.myng.entities.Game;
 import ru.vlsu.myng.entities.GameVersion;
 import ru.vlsu.myng.entities.ModerationVerdict;
+import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.GameRepository;
 import ru.vlsu.myng.repositories.GameVersionRepository;
 import ru.vlsu.myng.repositories.ModerationVerdictRepository;
+import ru.vlsu.myng.utils.NotFoundException;
 
 import java.io.File;
 import java.io.IOException;
@@ -71,7 +74,20 @@ public class GameVersionService {
     @Transactional(readOnly = true)
     public GameVersion getGameVersionById(Integer id) {
         return gameVersionRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Версия игры не найдена"));
+                .orElseThrow(() -> new NotFoundException("Версия игры не найдена"));
+    }
+
+    /**
+     * Проверяет, что пользователь — разработчик указанной игры.
+     *
+     * @throws AccessDeniedException если игра принадлежит другому разработчику
+     */
+    private void checkIsDeveloper(Game game, User currentUser) {
+        User developer = game.getDeveloper();
+
+        if (developer == null || !developer.getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Вы не являетесь разработчиком этой игры");
+        }
     }
 
     /**
@@ -143,8 +159,11 @@ public class GameVersionService {
      *   <li>проверка наличия всех указанных файлов в коммите.</li>
      * </ul>
      *
-     * @param dto запрос на публикацию версии игры. Не должен быть null.
+     * @param dto         запрос на публикацию версии игры. Не должен быть null.
+     * @param currentUser пользователь, публикующий версию.
+     *                    Должен быть разработчиком этой игры.
      *
+     * @throws AccessDeniedException если игра принадлежит другому разработчику
      * @throws RuntimeException если:
      *         <ul>
      *           <li>игра с указанным id не найдена;</li>
@@ -152,8 +171,10 @@ public class GameVersionService {
      *         </ul>
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
-    public void publishGameVersion(PublishGameVersionRequest dto) {
+    public void publishGameVersion(PublishGameVersionRequest dto, User currentUser) {
         var game = gameService.getGameById(dto.getGameId());
+
+        checkIsDeveloper(game, currentUser);
 
         githubService.validateCommitExists(game.getRepo(), dto.getCommitHash());
         githubService.validateFilesExistInCommit(game.getRepo(), dto.getCommitHash(), dto.getFiles());
@@ -214,25 +235,27 @@ public class GameVersionService {
      * затем — сама директория версии.
      * </p>
      *
-     * @param gameId    идентификатор игры. Не должен быть null.
-     * @param versionId идентификатор версии. Не должен быть null.
+     * @param gameId      идентификатор игры. Не должен быть null.
+     * @param versionId   идентификатор версии. Не должен быть null.
+     * @param currentUser пользователь, удаляющий версию.
+     *                    Должен быть разработчиком этой игры.
      *
-     * @throws IllegalArgumentException если:
-     *         <ul>
-     *           <li>версия с указанным id не найдена;</li>
-     *           <li>версия не принадлежит указанной игре.</li>
-     *         </ul>
+     * @throws NotFoundException        если версия с указанным id не найдена
+     * @throws IllegalArgumentException если версия не принадлежит указанной игре
+     * @throws AccessDeniedException    если игра принадлежит другому разработчику
      * @throws RuntimeException если не удалось удалить файлы с диска
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
     @Transactional
-    public void deleteGameVersion(Integer gameId, Integer versionId) {
+    public void deleteGameVersion(Integer gameId, Integer versionId, User currentUser) {
         GameVersion version = gameVersionRepository.findById(versionId)
-                .orElseThrow(() -> new IllegalArgumentException("Версия не найдена"));
+                .orElseThrow(() -> new NotFoundException("Версия не найдена"));
 
         if (!version.getGame().getId().equals(gameId)) {
             throw new IllegalArgumentException("Версия не принадлежит данной игре");
         }
+
+        checkIsDeveloper(version.getGame(), currentUser);
 
         Path versionPath = Paths.get("..", "storage", "gamefiles", "game_" + gameId, "ver_" + versionId);
 

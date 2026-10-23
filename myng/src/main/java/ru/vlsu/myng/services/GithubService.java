@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import ru.vlsu.myng.entities.GameVersion;
+import ru.vlsu.myng.utils.GameDownloadException;
 import ru.vlsu.myng.utils.GithubException;
 
 import java.io.ByteArrayOutputStream;
@@ -438,7 +439,7 @@ public class GithubService {
         } catch (Exception e) {
             // не оставляем на диске частично распакованную версию
             deleteDirectoryQuietly(targetDir);
-            throw new RuntimeException("Ошибка загрузки файлов из GitHub: " + e.getMessage(), e);
+            throw new GameDownloadException("Ошибка загрузки файлов из GitHub: " + e.getMessage(), e);
         } finally {
             if (zipFile != null) {
                 try {

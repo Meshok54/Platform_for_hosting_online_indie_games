@@ -1,6 +1,7 @@
 package ru.vlsu.myng.services;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.CollectionRepository;
 import ru.vlsu.myng.repositories.GameRepository;
 import ru.vlsu.myng.repositories.UserRepository;
+import ru.vlsu.myng.utils.NotFoundException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -97,24 +99,20 @@ public class CollectionService {
      * (ограничение на уровне БД).
      * </p>
      *
-     * @param userId идентификатор пользователя-владельца. Не должен быть null.
-     * @param name   название коллекции. Не должно быть null или пустым.
+     * @param owner пользователь-владелец (текущий пользователь). Не должен быть null.
+     * @param name  название коллекции. Не должно быть null или пустым.
      *
      * @return созданная коллекция с присвоенным id.
      *
-     * @throws IllegalArgumentException если пользователь с указанным id не найден
      * @throws org.springframework.dao.DataIntegrityViolationException
      *         если коллекция с таким именем уже существует у пользователя
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
-    public Collection createCollection(Integer userId, String name) {
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    public Collection createCollection(User owner, String name) {
 
         Collection collection = new Collection();
         collection.setName(name);
-        collection.setUser(user);
+        collection.setUser(owner);
 
         return collectionRepository.save(collection);
     }
@@ -128,15 +126,50 @@ public class CollectionService {
      * </p>
      *
      * @param collectionId идентификатор коллекции. Не должен быть null.
+     * @param currentUser  пользователь, выполняющий удаление.
      *
-     * @throws IllegalArgumentException если коллекция с указанным id не найдена
+     * @throws NotFoundException     если коллекция с указанным id не найдена
+     * @throws AccessDeniedException если коллекция принадлежит другому пользователю
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
-    public void deleteCollection(Integer collectionId) {
-        Collection collection = collectionRepository.findById(collectionId)
-                .orElseThrow(() -> new IllegalArgumentException("Collection not found"));
+    public void deleteCollection(Integer collectionId, User currentUser) {
+        Collection collection = getOwnCollection(collectionId, currentUser);
 
         collectionRepository.delete(collection);
+    }
+
+    /**
+     * Переименовывает коллекцию текущего пользователя.
+     *
+     * @param collectionId идентификатор коллекции. Не должен быть null.
+     * @param name         новое название. Не должно быть null или пустым.
+     * @param currentUser  пользователь, выполняющий изменение.
+     *
+     * @throws NotFoundException     если коллекция с указанным id не найдена
+     * @throws AccessDeniedException если коллекция принадлежит другому пользователю
+     */
+    @Transactional
+    public void renameCollection(Integer collectionId, String name, User currentUser) {
+        Collection collection = getOwnCollection(collectionId, currentUser);
+
+        collection.setName(name);
+        collectionRepository.save(collection);
+    }
+
+    /**
+     * Возвращает коллекцию, проверив, что её владелец — текущий пользователь.
+     *
+     * @throws NotFoundException     если коллекция не найдена
+     * @throws AccessDeniedException если коллекция принадлежит другому пользователю
+     */
+    private Collection getOwnCollection(Integer collectionId, User currentUser) {
+        Collection collection = findById(collectionId);
+
+        if (!collection.getUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Можно изменять только свои коллекции");
+        }
+
+        return collection;
     }
 
     /**
@@ -170,12 +203,12 @@ public class CollectionService {
      *
      * @return коллекция с указанным id.
      *
-     * @throws RuntimeException если коллекция с указанным id не найдена
+     * @throws NotFoundException если коллекция с указанным id не найдена
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
     public Collection findById(Integer id) {
         return collectionRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Collection not found: " + id));
+                .orElseThrow(() -> new NotFoundException("Collection not found: " + id));
     }
 
     /**
@@ -214,16 +247,17 @@ public class CollectionService {
      *
      * @param collectionId идентификатор коллекции. Не должен быть null.
      * @param gameId       идентификатор игры. Не должен быть null.
+     * @param currentUser  пользователь, выполняющий изменение.
      *
-     * @throws RuntimeException если коллекция или игра с указанным id не найдена
+     * @throws NotFoundException     если коллекция или игра с указанным id не найдена
+     * @throws AccessDeniedException если коллекция принадлежит другому пользователю
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
     @Transactional
-    public void addGameToCollection(Integer collectionId, Integer gameId) {
-        Collection collection = collectionRepository.findById(collectionId)
-                .orElseThrow(() -> new RuntimeException("Коллекция не найдена"));
+    public void addGameToCollection(Integer collectionId, Integer gameId, User currentUser) {
+        Collection collection = getOwnCollection(collectionId, currentUser);
         Game game = gameRepository.findById(gameId)
-                .orElseThrow(() -> new RuntimeException("Игра не найдена"));
+                .orElseThrow(() -> new NotFoundException("Игра не найдена"));
 
         collection.getGames().add(game);
         collectionRepository.save(collection);
@@ -238,18 +272,19 @@ public class CollectionService {
      *
      * @param collectionId идентификатор коллекции. Не должен быть null.
      * @param gameId       идентификатор игры. Не должен быть null.
+     * @param currentUser  пользователь, выполняющий изменение.
      *
-     * @throws RuntimeException если коллекция или игра с указанным id не найдена
+     * @throws NotFoundException     если коллекция или игра с указанным id не найдена
+     * @throws AccessDeniedException если коллекция принадлежит другому пользователю
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
     @Transactional
-    public void removeGameFromCollection(Integer collectionId, Integer gameId) {
+    public void removeGameFromCollection(Integer collectionId, Integer gameId, User currentUser) {
 
-        Collection collection = collectionRepository.findById(collectionId)
-                .orElseThrow(() -> new RuntimeException("Коллекция не найдена"));
+        Collection collection = getOwnCollection(collectionId, currentUser);
 
         Game game = gameRepository.findById(gameId)
-                .orElseThrow(() -> new RuntimeException("Игра не найдена"));
+                .orElseThrow(() -> new NotFoundException("Игра не найдена"));
 
         collection.getGames().removeIf(g -> g.getId().equals(gameId));
 

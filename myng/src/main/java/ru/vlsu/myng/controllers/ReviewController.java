@@ -39,13 +39,17 @@ public class ReviewController {
     @PostMapping("/update/{id}")
     @ResponseBody
     public void updateReview(@PathVariable Integer id,
-            @RequestBody ReviewUpdate dto) {
-        reviewService.updateReview(id, dto);
+            @RequestBody ReviewUpdate dto,
+            Principal principal) {
+        User currentUser = userService.findByEmail(principal.getName());
+        reviewService.updateReview(id, dto, currentUser);
     }
 
     @PostMapping("/delete/{id}")
-    public void deleteReview(@PathVariable Integer id) {
-        reviewService.delete(id);
+    @ResponseBody
+    public void deleteReview(@PathVariable Integer id, Principal principal) {
+        User currentUser = userService.findByEmail(principal.getName());
+        reviewService.deleteOwnReview(id, currentUser);
     }
 
     @PostMapping("/game/{id}")

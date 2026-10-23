@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import ru.vlsu.myng.dto.CollectionDTO;
 import ru.vlsu.myng.entities.Collection;
 import ru.vlsu.myng.entities.Game;
@@ -91,14 +92,11 @@ class CollectionServiceTest {
 
     @Test
     void shouldCreateCollection() {
-        when(userRepository.findById(1))
-                .thenReturn(Optional.of(user));
-
         when(collectionRepository.save(any(Collection.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         Collection created =
-                collectionService.createCollection(1, "New Collection");
+                collectionService.createCollection(user, "New Collection");
 
         assertEquals("New Collection", created.getName());
         assertEquals(user, created.getUser());
@@ -112,7 +110,7 @@ class CollectionServiceTest {
         when(collectionRepository.findById(100))
                 .thenReturn(Optional.of(collection));
 
-        collectionService.deleteCollection(100);
+        collectionService.deleteCollection(100, user);
 
         verify(collectionRepository).delete(collection);
     }
@@ -128,7 +126,7 @@ class CollectionServiceTest {
         when(gameRepository.findById(10))
                 .thenReturn(Optional.of(game));
 
-        collectionService.addGameToCollection(100, 10);
+        collectionService.addGameToCollection(100, 10, user);
 
         assertTrue(collection.getGames().contains(game));
 
@@ -146,7 +144,7 @@ class CollectionServiceTest {
         when(gameRepository.findById(10))
                 .thenReturn(Optional.of(game));
 
-        collectionService.removeGameFromCollection(100, 10);
+        collectionService.removeGameFromCollection(100, 10, user);
 
         assertTrue(collection.getGames().isEmpty());
 
@@ -203,5 +201,69 @@ class CollectionServiceTest {
         );
 
         assertEquals("Collection not found: 999", ex.getMessage());
+    }
+
+    // ==========================================
+    // Проверка владельца коллекции
+    // ==========================================
+
+    @Test
+    void shouldNotDeleteForeignCollection() {
+        User otherUser = new User();
+        otherUser.setId(2);
+
+        when(collectionRepository.findById(100))
+                .thenReturn(Optional.of(collection));
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> collectionService.deleteCollection(100, otherUser)
+        );
+
+        verify(collectionRepository, never()).delete(any());
+    }
+
+    @Test
+    void shouldNotAddGameToForeignCollection() {
+        User otherUser = new User();
+        otherUser.setId(2);
+
+        when(collectionRepository.findById(100))
+                .thenReturn(Optional.of(collection));
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> collectionService.addGameToCollection(100, 10, otherUser)
+        );
+
+        verify(collectionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldNotRenameForeignCollection() {
+        User otherUser = new User();
+        otherUser.setId(2);
+
+        when(collectionRepository.findById(100))
+                .thenReturn(Optional.of(collection));
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> collectionService.renameCollection(100, "Hacked", otherUser)
+        );
+
+        assertEquals("Favorites", collection.getName());
+        verify(collectionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRenameOwnCollection() {
+        when(collectionRepository.findById(100))
+                .thenReturn(Optional.of(collection));
+
+        collectionService.renameCollection(100, "Renamed", user);
+
+        assertEquals("Renamed", collection.getName());
+        verify(collectionRepository).save(collection);
     }
 }

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import ru.vlsu.myng.dto.ReviewUpdate;
 
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import ru.vlsu.myng.repositories.ModerationVerdictRepository;
 import ru.vlsu.myng.repositories.NotificationRepository;
 import ru.vlsu.myng.repositories.ReviewRepository;
 import ru.vlsu.myng.repositories.UserRepository;
+import ru.vlsu.myng.utils.NotFoundException;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -46,12 +48,16 @@ public class ReviewService {
      * @param dto DTO с новыми данными отзыва.
      *            Не должен быть null.
      *
-     * @throws IllegalArgumentException                    если отзыв с указанным id не найден
+     * @param currentUser пользователь, выполняющий изменение.
+     *                    Изменять можно только свой отзыв.
+     *
+     * @throws NotFoundException                           если отзыв с указанным id не найден
+     * @throws AccessDeniedException                       если отзыв принадлежит другому пользователю
      * @throws org.springframework.dao.DataAccessException
      *                                                     при ошибке доступа к базе данных
      */
-    public void updateReview(Integer reviewId, ReviewUpdate dto) {
-        Review review = reviewRepository.findById(reviewId).orElseThrow();
+    public void updateReview(Integer reviewId, ReviewUpdate dto, User currentUser) {
+        Review review = getOwnReview(reviewId, currentUser);
 
         review.setText(dto.getText());
         review.setRating(dto.getRating());
@@ -71,14 +77,30 @@ public class ReviewService {
      *
      * @return найденный отзыв.
      *
-     * @throws RuntimeException                           если отзыв не найден
+     * @throws NotFoundException                          если отзыв не найден
      * @throws org.springframework.dao.DataAccessException
      *                                                     при ошибке доступа к базе данных
      */
     @Transactional(readOnly = true)
     public Review getReviewById(Integer id) {
         return reviewRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+                .orElseThrow(() -> new NotFoundException("Отзыв не найден"));
+    }
+
+    /**
+     * Возвращает отзыв, проверив, что его автор — текущий пользователь.
+     *
+     * @throws NotFoundException     если отзыв не найден
+     * @throws AccessDeniedException если отзыв принадлежит другому пользователю
+     */
+    private Review getOwnReview(Integer reviewId, User currentUser) {
+        Review review = getReviewById(reviewId);
+
+        if (!review.getUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Можно изменять только свои отзывы");
+        }
+
+        return review;
     }
 
     /**
@@ -203,6 +225,21 @@ public class ReviewService {
                                     / g.getReviewCount());
         }
         reviewRepository.deleteById(id);
+    }
+
+    /**
+     * Удаляет отзыв по запросу его автора.
+     *
+     * @param id          идентификатор отзыва.
+     * @param currentUser пользователь, выполняющий удаление.
+     *
+     * @throws NotFoundException     если отзыв не найден
+     * @throws AccessDeniedException если отзыв принадлежит другому пользователю
+     */
+    @Transactional
+    public void deleteOwnReview(Integer id, User currentUser) {
+        getOwnReview(id, currentUser);
+        delete(id);
     }
 
     @Transactional(readOnly = true)

@@ -124,15 +124,11 @@ public class GameController {
     @PostMapping("/publish/gamever")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> publishGameVersion(
-            @Valid @ModelAttribute PublishGameVersionRequest request) {
+            @Valid @ModelAttribute PublishGameVersionRequest request,
+            Principal principal) {
 
-        System.out.println(request.getGameId());
-        System.out.println(request.getGameVerName());
-        System.out.println(request.getCommitHash());
-        System.out.println(request.getFiles());
-        System.out.println(request.getChangelog());
-
-        gameVersionService.publishGameVersion(request);
+        User currentUser = userService.findByEmail(principal.getName());
+        gameVersionService.publishGameVersion(request, currentUser);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -143,18 +139,16 @@ public class GameController {
     @ResponseBody
     public ResponseEntity<Map<String, Object>> deleteGameVersion(
             @PathVariable Integer gameId,
-            @PathVariable Integer versionId) {
+            @PathVariable Integer versionId,
+            Principal principal) {
 
-        try {
-            gameVersionService.deleteGameVersion(gameId, versionId);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Версия успешно удалена"));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                    "success", false,
-                    "message", e.getMessage()));
-        }
+        // ошибки (нет версии, чужая игра) обрабатывает GlobalExceptionHandler
+        User currentUser = userService.findByEmail(principal.getName());
+        gameVersionService.deleteGameVersion(gameId, versionId, currentUser);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Версия успешно удалена"));
     }
 
     @GetMapping("/repo-tree")

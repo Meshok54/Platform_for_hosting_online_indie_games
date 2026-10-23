@@ -45,9 +45,12 @@ public class CollectionController {
     @PostMapping("/create")
     @ResponseBody
     public CreateCollectionDto createCollection(
-            @ModelAttribute CreateCollectionDto dto) {
+            @ModelAttribute CreateCollectionDto dto,
+            Principal principal) {
 
-        Collection collection = collectionService.createCollection(dto.getUserId(), dto.getName());
+        // владелец — всегда текущий пользователь, userId из запроса не используется
+        User currentUser = userService.findByEmail(principal.getName());
+        Collection collection = collectionService.createCollection(currentUser, dto.getName());
 
         CreateCollectionDto res = new CreateCollectionDto();
         res.setUserId(collection.getId());
@@ -58,8 +61,9 @@ public class CollectionController {
 
     @PostMapping("/delete/{collectionId}")
     @ResponseBody
-    public void deleteCollection(@PathVariable Integer collectionId) {
-        collectionService.deleteCollection(collectionId);
+    public void deleteCollection(@PathVariable Integer collectionId, Principal principal) {
+        User currentUser = userService.findByEmail(principal.getName());
+        collectionService.deleteCollection(collectionId, currentUser);
     }
 
     @PostMapping("/{id}/edit")
@@ -67,15 +71,8 @@ public class CollectionController {
             @PathVariable Integer id,
             @RequestBody CollectionName dto,
             Principal principal) {
-        Collection collection = collectionService.findById(id);
         User currentUser = userService.findByEmail(principal.getName());
-
-        if (!collection.getUser().getId().equals(currentUser.getId())) {
-            return ResponseEntity.badRequest().body("Нельзя редактировать чужую коллекцию");
-        }
-
-        collection.setName(dto.getName());
-        collectionService.save(collection);
+        collectionService.renameCollection(id, dto.getName(), currentUser);
 
         return ResponseEntity.ok().build();
     }
@@ -84,22 +81,18 @@ public class CollectionController {
     public ResponseEntity<?> addGame(@PathVariable Integer collectionId,
             @PathVariable Integer gameId,
             Principal principal) {
-        if (principal == null)
-            return ResponseEntity.status(401).build();
+        User currentUser = userService.findByEmail(principal.getName());
+        collectionService.addGameToCollection(collectionId, gameId, currentUser);
 
-        try {
-            collectionService.addGameToCollection(collectionId, gameId);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/{collectionId}/remove-game/{gameId}")
     @ResponseBody
     public void removeGameFromCollection(@PathVariable Integer collectionId,
-                                         @PathVariable Integer gameId) {
-        System.out.println("Removing gameid " + gameId + " from collectionid" + collectionId);
-        collectionService.removeGameFromCollection(collectionId, gameId);
+                                         @PathVariable Integer gameId,
+                                         Principal principal) {
+        User currentUser = userService.findByEmail(principal.getName());
+        collectionService.removeGameFromCollection(collectionId, gameId, currentUser);
     }
 }

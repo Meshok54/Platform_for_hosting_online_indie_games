@@ -6,6 +6,7 @@ import ru.vlsu.myng.entities.Notification;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.NotificationRepository;
 import ru.vlsu.myng.repositories.UserRepository;
+import ru.vlsu.myng.utils.NotFoundException;
 
 import java.util.List;
 
@@ -67,11 +68,11 @@ public class NotificationService {
 
         Notification notification = notificationRepository
                 .findById(notificationId)
-                .orElseThrow();
+                .orElseThrow(() -> new NotFoundException("Уведомление не найдено"));
 
         User user = userRepository
                 .findById(userId)
-                .orElseThrow();
+                .orElseThrow(() -> new NotFoundException("Пользователь не найден"));
 
         notification.getUsers().remove(user);
 

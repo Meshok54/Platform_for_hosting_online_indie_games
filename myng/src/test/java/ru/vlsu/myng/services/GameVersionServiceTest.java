@@ -6,6 +6,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import ru.vlsu.myng.entities.User;
 import org.springframework.test.util.ReflectionTestUtils;
 import ru.vlsu.myng.dto.PublishGameVersionRequest;
 import ru.vlsu.myng.entities.Game;
@@ -133,9 +135,13 @@ class GameVersionServiceTest {
     @Test
     void shouldPublishGameVersion() {
 
+        User developer = new User();
+        developer.setId(1);
+
         Game game = new Game();
         game.setId(10);
         game.setRepo("https://github.com/test/repo");
+        game.setDeveloper(developer);
 
         PublishGameVersionRequest dto = new PublishGameVersionRequest();
         dto.setGameId(10);
@@ -152,7 +158,7 @@ class GameVersionServiceTest {
         when(moderationVerdictRepository.save(any(ModerationVerdict.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        gameVersionService.publishGameVersion(dto);
+        gameVersionService.publishGameVersion(dto, developer);
 
         verify(githubService).validateCommitExists(
                 game.getRepo(),
@@ -174,8 +180,12 @@ class GameVersionServiceTest {
     @Test
     void shouldDeleteGameVersion() {
 
+        User developer = new User();
+        developer.setId(1);
+
         Game game = new Game();
         game.setId(7);
+        game.setDeveloper(developer);
 
         ModerationVerdict verdict = new ModerationVerdict();
 
@@ -190,7 +200,7 @@ class GameVersionServiceTest {
         when(gameVersionRepository.findByGameIdOrderByCreatedAtAsc(7))
                 .thenReturn(List.of());
 
-        gameVersionService.deleteGameVersion(7, 14);
+        gameVersionService.deleteGameVersion(7, 14, developer);
 
         verify(moderationVerdictRepository).delete(verdict);
 
@@ -216,7 +226,7 @@ class GameVersionServiceTest {
 
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
-                () -> gameVersionService.deleteGameVersion(7, 14)
+                () -> gameVersionService.deleteGameVersion(7, 14, new User())
         );
 
         assertEquals(
@@ -228,8 +238,12 @@ class GameVersionServiceTest {
     @Test
     void shouldUpdateFirstReleaseDateAfterDeletion() {
 
+        User developer = new User();
+        developer.setId(1);
+
         Game game = new Game();
         game.setId(7);
+        game.setDeveloper(developer);
 
         GameVersion deletedVersion = new GameVersion();
         deletedVersion.setId(14);
@@ -246,7 +260,7 @@ class GameVersionServiceTest {
         when(gameVersionRepository.findByGameIdOrderByCreatedAtAsc(7))
                 .thenReturn(List.of(remainingVersion));
 
-        gameVersionService.deleteGameVersion(7, 14);
+        gameVersionService.deleteGameVersion(7, 14, developer);
 
         assertEquals(
                 Instant.parse("2024-01-01T00:00:00Z"),
@@ -254,5 +268,56 @@ class GameVersionServiceTest {
         );
 
         verify(gameRepository).save(game);
+    }
+
+    // ==========================================
+    // Проверка разработчика игры
+    // ==========================================
+
+    @Test
+    void shouldNotPublishVersion_ForForeignGame() {
+        User developer = new User();
+        developer.setId(1);
+        User otherUser = new User();
+        otherUser.setId(2);
+
+        Game game = new Game();
+        game.setId(10);
+        game.setDeveloper(developer);
+
+        PublishGameVersionRequest dto = new PublishGameVersionRequest();
+        dto.setGameId(10);
+
+        when(gameService.getGameById(10)).thenReturn(game);
+
+        assertThrows(AccessDeniedException.class,
+                () -> gameVersionService.publishGameVersion(dto, otherUser));
+
+        verifyNoInteractions(githubService);
+        verify(gameVersionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldNotDeleteVersion_OfForeignGame() {
+        User developer = new User();
+        developer.setId(1);
+        User otherUser = new User();
+        otherUser.setId(2);
+
+        Game game = new Game();
+        game.setId(7);
+        game.setDeveloper(developer);
+
+        GameVersion version = new GameVersion();
+        version.setId(14);
+        version.setGame(game);
+
+        when(gameVersionRepository.findById(14))
+                .thenReturn(Optional.of(version));
+
+        assertThrows(AccessDeniedException.class,
+                () -> gameVersionService.deleteGameVersion(7, 14, otherUser));
+
+        verify(gameVersionRepository, never()).delete(any());
     }
 }

@@ -16,6 +16,7 @@ import ru.vlsu.myng.dto.CatalogGameDTO;
 import ru.vlsu.myng.dto.GameEditRequestDTO;
 import ru.vlsu.myng.dto.GameFilterDTO;
 import ru.vlsu.myng.dto.GamePageDTO;
+import ru.vlsu.myng.utils.NotFoundException;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -270,7 +271,7 @@ public class GameService {
     @Transactional(readOnly = true)
     public Game getGameById(Integer id) {
         return gameRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Игра не найдена"));
+                .orElseThrow(() -> new NotFoundException("Игра не найдена"));
     }
 
     /**
@@ -583,7 +584,7 @@ public class GameService {
     @Transactional
     public void updateGame(Integer gameId, GameEditRequestDTO request) throws IOException {
         Game game = gameRepository.findById(gameId)
-                .orElseThrow(() -> new RuntimeException("Игра не найдена"));
+                .orElseThrow(() -> new NotFoundException("Игра не найдена"));
 
         if (request.getName() != null && !request.getName().isBlank()) {
             game.setName(request.getName());

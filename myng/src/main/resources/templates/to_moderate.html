@@ -757,8 +757,8 @@
                 });
 
                 if (!response.ok) {
-                  const errorText = await response.text();
-                  throw new Error(errorText || "Approve failed");
+                  const data = await response.json().catch(() => null);
+                  throw new Error(data?.message || "Не удалось одобрить заявку");
                 }
 
                 console.log("Accepted!");

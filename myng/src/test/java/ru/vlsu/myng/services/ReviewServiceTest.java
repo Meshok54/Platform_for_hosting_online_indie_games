@@ -7,6 +7,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import ru.vlsu.myng.dto.ReviewUpdate;
+import ru.vlsu.myng.utils.NotFoundException;
 import ru.vlsu.myng.entities.Game;
 import ru.vlsu.myng.entities.ModerationVerdict;
 import ru.vlsu.myng.entities.Notification;
@@ -220,5 +223,78 @@ class ReviewServiceTest {
         assertThrows(EntityNotFoundException.class, () -> {
             reviewService.incrementReportCount(999);
         });
+    }
+
+    // ==========================================
+    // Проверка автора отзыва
+    // ==========================================
+
+    @Test
+    void deleteOwnReview_ShouldThrow_WhenReviewBelongsToAnotherUser() {
+        User author = new User();
+        author.setId(1);
+        User otherUser = new User();
+        otherUser.setId(2);
+
+        Review review = new Review();
+        review.setId(100);
+        review.setUser(author);
+
+        when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
+
+        assertThrows(AccessDeniedException.class,
+                () -> reviewService.deleteOwnReview(100, otherUser));
+
+        verify(reviewRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteOwnReview_ShouldDelete_WhenUserIsAuthor() {
+        User author = new User();
+        author.setId(1);
+
+        Review review = new Review();
+        review.setId(100);
+        review.setUser(author);
+        review.setRating((byte) 4);
+
+        when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
+        when(reviewRepository.findGameById(100)).thenReturn(Optional.empty());
+
+        reviewService.deleteOwnReview(100, author);
+
+        verify(reviewRepository).deleteById(100);
+    }
+
+    @Test
+    void updateReview_ShouldThrow_WhenReviewBelongsToAnotherUser() {
+        User author = new User();
+        author.setId(1);
+        User otherUser = new User();
+        otherUser.setId(2);
+
+        Review review = new Review();
+        review.setId(100);
+        review.setUser(author);
+        review.setText("Исходный текст");
+
+        ReviewUpdate dto = new ReviewUpdate();
+        dto.setText("Чужая правка");
+        dto.setRating((byte) 1);
+
+        when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
+
+        assertThrows(AccessDeniedException.class,
+                () -> reviewService.updateReview(100, dto, otherUser));
+
+        assertEquals("Исходный текст", review.getText());
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void getReviewById_ShouldThrowNotFound_WhenReviewMissing() {
+        when(reviewRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> reviewService.getReviewById(999));
     }
 }

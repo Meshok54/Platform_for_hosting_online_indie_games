@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import ru.vlsu.myng.services.CustomUserDetailsService;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -36,7 +37,13 @@ public class SecurityConfig {
         }
 
         @Bean
-        public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        public SecurityFilterChain filterChain(
+                        HttpSecurity http,
+                        // Ключ подписи cookie «Запомнить меня». Берётся из credentials.properties;
+                        // если не задан, генерируется при каждом запуске (тогда после перезапуска
+                        // сервера «запомненные» входы сбрасываются)
+                        @Value("${app.remember-me.key:#{T(java.util.UUID).randomUUID().toString()}}")
+                        String rememberMeKey) throws Exception {
                 http
                                 .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
                                 .csrf(csrf -> csrf.disable())
@@ -120,7 +127,7 @@ public class SecurityConfig {
                                                 .permitAll())
 
                                 .rememberMe(remember -> remember
-                                                .key("myngSecretKey")
+                                                .key(rememberMeKey)
                                                 .tokenValiditySeconds(86400)
                                                 .rememberMeParameter("remember-me"))
 
