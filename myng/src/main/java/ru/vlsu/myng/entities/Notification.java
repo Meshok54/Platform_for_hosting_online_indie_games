@@ -30,6 +30,7 @@ public class Notification {
     @Column(columnDefinition = "TEXT")
     private String text;
 
+    @ToString.Exclude
     @ManyToMany
     @JoinTable(
             name = "user_notification",

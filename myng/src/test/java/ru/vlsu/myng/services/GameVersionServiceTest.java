@@ -61,76 +61,56 @@ class GameVersionServiceTest {
                 "storagePath",
                 tempDir.toString()
         );
+    }
 
-        ReflectionTestUtils.setField(
-                gameVersionService,
-                "port",
-                "8080"
+    @Test
+    void shouldResolveEntryPointAsRelativeUrl() {
+        Game game = new Game();
+        game.setId(7);
+
+        GameVersion version = new GameVersion();
+        version.setId(14);
+        version.setGame(game);
+        version.setEntryPoint("index.html");
+
+        assertEquals(
+                "/static/gamefiles/game_7/ver_14/index.html",
+                gameVersionService.resolveEntryPoint(version)
         );
     }
 
-    // LEGACY
-//    @Test
-//    void shouldResolveEntryPoint() throws IOException {
-//
-//        Game game = new Game();
-//        game.setId(7);
-//
-//        GameVersion version = new GameVersion();
-//        version.setId(14);
-//        version.setGame(game);
-//
-//        Path versionDir = tempDir
-//                .resolve("gamefiles")
-//                .resolve("game_7")
-//                .resolve("ver_14");
-//
-//        Files.createDirectories(versionDir);
-//
-//        Path indexFile = versionDir.resolve("index.html");
-//
-//        Files.writeString(indexFile, "<html>Hello</html>");
-//
-//        String result = gameVersionService.resolveEntryPoint(version);
-//
-//        assertEquals(
-//                "http://localhost:8080/static/gamefiles/game_7/ver_14/index.html",
-//                result
-//        );
-//    }
+    @Test
+    void shouldDeleteVersionFilesFromStoragePath() throws IOException {
+        User developer = new User();
+        developer.setId(1);
 
-    //LEGACY
-//    @Test
-//    void shouldThrow_WhenEntryPointMissing() throws IOException
-//    {
-//        Game game = new Game();
-//        game.setId(1);
-//
-//        GameVersion version = new GameVersion();
-//        version.setId(2);
-//        version.setGame(game);
-//
-//        Path versionDir = tempDir
-//                .resolve("gamefiles")
-//                .resolve("game_1")
-//                .resolve("ver_2");
-//
-//        Files.createDirectories(versionDir);
-//        
-//        Files.writeString(
-//                versionDir.resolve("README.txt"),
-//                "no index here"
-//        );
-//
-//        RuntimeException ex = assertThrows(
-//                RuntimeException.class,
-//                () -> gameVersionService.resolveEntryPoint(version)
-//        );
-//
-//        assertTrue(
-//                ex.getMessage().contains("Entry file not found")
-//        );
-//    }
+        Game game = new Game();
+        game.setId(7);
+        game.setDeveloper(developer);
+
+        GameVersion version = new GameVersion();
+        version.setId(14);
+        version.setGame(game);
+
+        Path versionDir = tempDir
+                .resolve("gamefiles")
+                .resolve("game_7")
+                .resolve("ver_14");
+
+        Files.createDirectories(versionDir.resolve("assets"));
+        Files.writeString(versionDir.resolve("index.html"), "<html></html>");
+        Files.writeString(versionDir.resolve("assets").resolve("main.js"), "// game");
+
+        when(gameVersionRepository.findById(14))
+                .thenReturn(Optional.of(version));
+
+        when(gameVersionRepository.findByGameIdOrderByCreatedAtAsc(7))
+                .thenReturn(List.of());
+
+        gameVersionService.deleteGameVersion(7, 14, developer);
+
+        assertFalse(Files.exists(versionDir), "Файлы версии должны удаляться из app.storage.path");
+    }
 
     @Test
     void shouldPublishGameVersion() {

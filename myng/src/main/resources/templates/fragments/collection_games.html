@@ -119,7 +119,7 @@
             const collectionId = btn.dataset.collectionId;
 
             try {
-                const res = await fetch(`/${collectionId}/remove-game/${gameId}`, {
+                const res = await fetch(`/collections/${collectionId}/remove-game/${gameId}`, {
                     method: "POST"
                 });
 

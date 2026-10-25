@@ -21,10 +21,12 @@ public class Warning {
     @Column(nullable = false)
     private String reason;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "fk_mod")
     private User moderator;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "fk_user")
     private User user;

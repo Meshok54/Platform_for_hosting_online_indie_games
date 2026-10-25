@@ -24,10 +24,12 @@ public class Collection {
         @Column(nullable = false)
         private String name;
 
+        @ToString.Exclude
         @ManyToOne(optional = false)
         @JoinColumn(name = "fk_user")
         private User user;
 
+        @ToString.Exclude
         @ManyToMany
         @JoinTable(name = "game_collection", joinColumns = @JoinColumn(name = "fk_collection"), inverseJoinColumns = @JoinColumn(name = "fk_game"))
         private Set<Game> games = new HashSet<>();

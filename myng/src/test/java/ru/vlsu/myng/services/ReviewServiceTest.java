@@ -40,33 +40,96 @@ class ReviewServiceTest {
     private ReviewService reviewService;
 
     // ==========================================
-    // 1. ТЕСТЫ ДЛЯ МЕТОДА save()
+    // 1. ТЕСТЫ ДЛЯ МЕТОДА updateReview()
     // ==========================================
 
     @Test
-    void save_ShouldRecalculateGameRating_WhenReviewIsPresent() {
+    void updateReview_ShouldAdjustRatingSum_WithoutChangingReviewCount() {
+        User author = new User();
+        author.setId(1);
 
+        // у игры два отзыва: 5 и 3 (сумма 8, среднее 4.0)
         Game game = new Game();
         game.setId(1);
-        game.setRatingSum(10);
+        game.setRatingSum(8);
         game.setReviewCount(2);
-        game.setAverageRating(5.0);
+        game.setAverageRating(4.0);
 
         Review review = new Review();
         review.setId(100);
-        review.setRating((byte) 5);
+        review.setUser(author);
+        review.setGame(game);
+        review.setRating((byte) 3);
+        review.setText("Старый текст отзыва");
 
-        when(reviewRepository.findGameById(100)).thenReturn(Optional.of(game));
+        ReviewUpdate dto = new ReviewUpdate();
+        dto.setRating((byte) 5);
+        dto.setText("Новый текст отзыва");
+
         when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
-        when(reviewRepository.save(review)).thenReturn(review);
 
-        Review savedReview = reviewService.save(review);
+        reviewService.updateReview(100, dto, author);
 
-        assertNotNull(savedReview);
-        assertEquals(15, game.getRatingSum(), "Сумма рейтингов должна увеличиться на 5");
-        assertEquals(3, game.getReviewCount(), "Количество отзывов должно увеличиться на 1");
-        assertEquals(5.0, game.getAverageRating(), "Средний рейтинг должен пересчитаться (15 / 3 = 5.0)");
-        verify(reviewRepository, times(1)).save(review);
+        assertEquals(10, game.getRatingSum(), "Сумма должна измениться на разницу оценок (8 - 3 + 5)");
+        assertEquals(2, game.getReviewCount(), "Количество отзывов при редактировании не меняется");
+        assertEquals(5.0, game.getAverageRating(), "Средний рейтинг: 10 / 2 = 5.0");
+        assertEquals((byte) 5, review.getRating());
+        assertEquals("Новый текст отзыва", review.getText());
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void updateReview_RepeatedEdits_ShouldNotInflateRating() {
+        User author = new User();
+        author.setId(1);
+
+        Game game = new Game();
+        game.setRatingSum(4);
+        game.setReviewCount(1);
+        game.setAverageRating(4.0);
+
+        Review review = new Review();
+        review.setId(100);
+        review.setUser(author);
+        review.setGame(game);
+        review.setRating((byte) 4);
+
+        ReviewUpdate dto = new ReviewUpdate();
+        dto.setRating((byte) 4);
+        dto.setText("Текст без изменений по смыслу");
+
+        when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
+
+        reviewService.updateReview(100, dto, author);
+        reviewService.updateReview(100, dto, author);
+        reviewService.updateReview(100, dto, author);
+
+        assertEquals(4, game.getRatingSum());
+        assertEquals(1, game.getReviewCount());
+        assertEquals(4.0, game.getAverageRating());
+    }
+
+    @Test
+    void updateReview_ShouldRejectInvalidRating() {
+        User author = new User();
+        author.setId(1);
+
+        Review review = new Review();
+        review.setId(100);
+        review.setUser(author);
+        review.setRating((byte) 4);
+
+        ReviewUpdate dto = new ReviewUpdate();
+        dto.setRating((byte) 9);
+        dto.setText("Достаточно длинный текст");
+
+        when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> reviewService.updateReview(100, dto, author));
+
+        assertEquals((byte) 4, review.getRating());
+        verify(reviewRepository, never()).save(any());
     }
 
     // ==========================================

@@ -28,6 +28,7 @@ public class DevApplication {
     @Column(columnDefinition = "TEXT")
     private String text;
 
+    @ToString.Exclude
     @OneToOne(optional = false)
     @JoinColumn(name = "fk_user")
     private User user;

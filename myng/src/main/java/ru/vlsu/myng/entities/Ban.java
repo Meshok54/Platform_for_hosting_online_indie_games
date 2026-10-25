@@ -29,10 +29,12 @@ public class Ban {
     @Column(name = "end_time", nullable = false)
     private Instant endTime;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "fk_mod")
     private User moderator;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "fk_user")
     private User user;

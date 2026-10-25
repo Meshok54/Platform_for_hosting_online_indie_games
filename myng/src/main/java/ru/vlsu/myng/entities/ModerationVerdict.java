@@ -26,18 +26,22 @@ public class ModerationVerdict {
     // проверка того, что лишь один из внешних ключей не null нужно проверять на
     // уровне бизнес-логики
 
+    @ToString.Exclude
     @OneToOne
     @JoinColumn(name = "fk_game_version")
     private GameVersion gameVersion;
 
+    @ToString.Exclude
     @OneToOne
     @JoinColumn(name = "fk_dev_application")
     private DevApplication devApplication;
 
+    @ToString.Exclude
     @OneToOne
     @JoinColumn(name = "fk_review")
     private Review review;
 
+    @ToString.Exclude
     @ManyToOne
     @JoinColumn(name = "fk_mod")
     private User moderator;

@@ -31,12 +31,14 @@ public class User {
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
+    @ToString.Exclude
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
     @Column(length = 255)
     private String bio;
 
+    @ToString.Exclude
     @Column(nullable = true, columnDefinition = "LONGBLOB")
     private byte[] profilePic;
 
@@ -50,9 +52,11 @@ public class User {
     @Column(name = "github_username")
     private String githubUsername;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "developer")
     private List<Game> games = new ArrayList<>();
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "user")
     private List<Review> reviews = new ArrayList<>();
 

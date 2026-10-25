@@ -23,8 +23,6 @@ public class RunningGameController {
         String entryPoint = gameVersionService.resolveEntryPoint(version);
 
         gameService.incrementGameTotalLaunches(version.getGame());
-        
-        System.out.println("GameVersion entry point: " + entryPoint);
 
         model.addAttribute("version", version);
         model.addAttribute("game", version.getGame());

@@ -631,7 +631,8 @@ public class GameService {
             Boolean approved = null;
             if (latestVersion != null) {
                 ModerationVerdict verdict = latestVersion.getModerationVerdict();
-                approved = verdict.getApproved();
+                // у версии может не быть вердикта (например, старые данные)
+                approved = verdict != null ? verdict.getApproved() : null;
             }
 
             String status;
@@ -705,6 +706,7 @@ public class GameService {
      *                                                     пройдена
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
+    @Transactional
     public void publishGame(PublishGameRequest dto) {
         githubService.validateRepoExists(dto.getRepoLink());
         githubService.validateCommitExists(dto.getRepoLink(), dto.getCommitHash());
@@ -723,8 +725,8 @@ public class GameService {
                 game.setImage(null);
             }
         } catch (IOException e) {
-            e.printStackTrace();
-            return;
+            // раньше здесь был молчаливый return: игра не сохранялась, а клиент получал «успех»
+            throw new IllegalStateException("Не удалось прочитать загруженное изображение", e);
         }
 
         game.setGenre(
@@ -745,8 +747,6 @@ public class GameService {
         game.setFirstReleaseDate(Instant.now());
 
         gameRepository.save(game);
-
-        System.out.println("publishing game with files: " + dto.getFiles());
 
         GameVersion version = new GameVersion();
         version.setGame(game);

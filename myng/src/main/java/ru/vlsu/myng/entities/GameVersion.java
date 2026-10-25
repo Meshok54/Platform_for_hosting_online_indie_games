@@ -42,10 +42,12 @@ public class GameVersion {
     @Column(nullable = false)
     private String entryPoint;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "fk_game")
     private Game game;
 
+    @ToString.Exclude
     @OneToOne(mappedBy = "gameVersion")
     private ModerationVerdict moderationVerdict;
 }

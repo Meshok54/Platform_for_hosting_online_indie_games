@@ -1,6 +1,7 @@
 package ru.vlsu.myng.services;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
@@ -47,6 +48,7 @@ import java.util.zip.ZipInputStream;
  * но вызовы блокируются для синхронной работы в MVC-контексте.
  * Файлы загружаются в директорию, указанную в свойстве {@code app.storage.path}.
  */
+@Slf4j
 @Service
 public class GithubService {
 
@@ -123,7 +125,6 @@ public class GithubService {
      */
     public void validateRepoExists(String repoUrl) {
         String[] parts = extractPath(repoUrl).split("/");
-        System.out.println(Arrays.toString(parts));
 
         String owner = parts[0];
         String repo = parts[1];
@@ -139,8 +140,8 @@ public class GithubService {
                     .onStatus(
                             HttpStatusCode::isError,
                             response -> response.bodyToMono(String.class).flatMap(body -> {
-                                System.out.println("GitHub error response body: " + body);
-                                System.out.println("Status code: " + response.statusCode());
+                                log.warn("GitHub вернул ошибку {} при проверке репозитория: {}",
+                                        response.statusCode(), body);
 
                                 return Mono.error(new GithubException(
                                         "repoLink",
@@ -154,7 +155,7 @@ public class GithubService {
         } catch (GithubException e) {
             throw e;
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            log.warn("Не удалось обратиться к GitHub при проверке репозитория {}", repoUrl, e);
             throw new GithubException("repoLink", "GitHub недоступен, попробуйте позже");
         }
     }
@@ -426,7 +427,7 @@ public class GithubService {
 
         Path targetDir = buildTargetPath(version);
 
-        System.out.println("Game download target directory: " + targetDir);
+        log.info("Скачивание версии игры {} в {}", version.getId(), targetDir);
 
         Path zipFile = null;
 

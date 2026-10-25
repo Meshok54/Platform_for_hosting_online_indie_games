@@ -40,6 +40,8 @@ public class ReviewService {
      * <p>
      * Выполняется поиск отзыва по идентификатору,
      * после чего обновляются поля text и rating.
+     * Сумма оценок игры корректируется на разницу между старой
+     * и новой оценкой, количество отзывов не меняется.
      * </p>
      *
      * @param reviewId идентификатор отзыва.
@@ -53,16 +55,52 @@ public class ReviewService {
      *
      * @throws NotFoundException                           если отзыв с указанным id не найден
      * @throws AccessDeniedException                       если отзыв принадлежит другому пользователю
+     * @throws IllegalArgumentException                    если оценка или текст некорректны
      * @throws org.springframework.dao.DataAccessException
      *                                                     при ошибке доступа к базе данных
      */
+    @Transactional
     public void updateReview(Integer reviewId, ReviewUpdate dto, User currentUser) {
         Review review = getOwnReview(reviewId, currentUser);
 
-        review.setText(dto.getText());
+        validateReviewContent(dto.getRating(), dto.getText());
+
+        int oldRating = review.getRating();
+
+        review.setText(dto.getText().trim());
         review.setRating(dto.getRating());
 
-        save(review);
+        Game game = review.getGame();
+        game.setRatingSum(game.getRatingSum() - oldRating + dto.getRating());
+        recalculateAverageRating(game);
+
+        reviewRepository.save(review);
+    }
+
+    /**
+     * Проверяет оценку и текст отзыва (те же правила, что и при создании).
+     *
+     * @throws IllegalArgumentException если оценка вне диапазона 1–5
+     *                                  или текст короче 10 символов
+     */
+    private void validateReviewContent(Byte rating, String text) {
+        if (rating == null || rating < 1 || rating > 5) {
+            throw new IllegalArgumentException("Оценка должна быть от 1 до 5");
+        }
+
+        if (text == null || text.trim().length() < 10) {
+            throw new IllegalArgumentException("Текст отзыва должен содержать минимум 10 символов");
+        }
+    }
+
+    /**
+     * Пересчитывает средний рейтинг игры по сумме оценок и количеству отзывов.
+     */
+    private void recalculateAverageRating(Game game) {
+        game.setAverageRating(
+                game.getReviewCount() == 0
+                        ? 0.0
+                        : (double) game.getRatingSum() / game.getReviewCount());
     }
 
     /**
@@ -141,44 +179,23 @@ public class ReviewService {
     }
 
     /**
-     * Сохраняет отзыв и обновляет агрегированную статистику игры.
+     * Сохраняет отзыв без изменения статистики игры.
      *
      * <p>
-     * Если отзыв уже существует (определяется по id),
-     * то пересчитываются:
-     * <ul>
-     *     <li>сумма рейтингов (ratingSum);</li>
-     *     <li>количество отзывов (reviewCount);</li>
-     *     <li>средний рейтинг (averageRating).</li>
-     * </ul>
+     * Для создания, изменения и удаления отзыва используйте
+     * {@link #createReview}, {@link #updateReview} и {@link #delete} —
+     * они поддерживают рейтинг игры в актуальном состоянии.
      * </p>
      *
-     * @param review отзыв для сохранения.
-     *               Не должен быть null.
-     *               Должен содержать корректный game и rating.
+     * @param review отзыв для сохранения. Не должен быть null.
      *
      * @return сохранённый отзыв.
      *
-     * @throws IllegalArgumentException                    если review или его id некорректны
      * @throws org.springframework.dao.DataAccessException
      *                                                     при ошибке доступа к базе данных
      */
     @Transactional
     public Review save(Review review) {
-        var game = reviewRepository.findGameById(review.getId());
-        var current = reviewRepository.findById(review.getId());
-        if (current.isPresent() && game.isPresent()) {
-            var g = game.get();
-            g.setRatingSum(
-                    g.getRatingSum() + review.getRating());
-
-            g.setReviewCount(
-                    g.getReviewCount() + 1);
-
-            g.setAverageRating(
-                    (double) g.getRatingSum()
-                            / g.getReviewCount());
-        }
         return reviewRepository.save(review);
     }
 
@@ -218,11 +235,7 @@ public class ReviewService {
             g.setReviewCount(
                     g.getReviewCount() - 1);
 
-            g.setAverageRating(
-                    g.getReviewCount() == 0
-                            ? 0.0
-                            : (double) g.getRatingSum()
-                                    / g.getReviewCount());
+            recalculateAverageRating(g);
         }
         reviewRepository.deleteById(id);
     }
@@ -296,9 +309,7 @@ public class ReviewService {
         game.setReviewCount(
                 game.getReviewCount() + 1);
 
-        game.setAverageRating(
-                (double) game.getRatingSum()
-                        / game.getReviewCount());
+        recalculateAverageRating(game);
 
         return reviewRepository.save(review);
     }

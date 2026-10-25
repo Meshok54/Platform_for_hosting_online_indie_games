@@ -2,6 +2,7 @@ package ru.vlsu.myng.controllers;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,10 +15,12 @@ import ru.vlsu.myng.services.*;
 import ru.vlsu.myng.entities.Game;
 import ru.vlsu.myng.entities.User;
 
+import java.io.IOException;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Controller
 @RequestMapping("/games")
 @RequiredArgsConstructor
@@ -71,7 +74,7 @@ public class GameController {
 
             return "game";
         } catch (Exception e) {
-            e.printStackTrace();
+            log.warn("Не удалось открыть страницу игры {}", id, e);
             return "redirect:/";
         }
     }
@@ -85,20 +88,21 @@ public class GameController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        try {
-            User currentUser = userService.findByEmail(principal.getName());
-            Game game = gameService.getGameById(id);
+        User currentUser = userService.findByEmail(principal.getName());
+        Game game = gameService.getGameById(id);
 
-            if (game.getDeveloper() == null || !game.getDeveloper().getId().equals(currentUser.getId())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Вы не являетесь разработчиком этой игры");
-            }
-
-            gameService.updateGame(id, request);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.badRequest().body("Не удалось обновить игру: " + e.getMessage());
+        if (game.getDeveloper() == null || !game.getDeveloper().getId().equals(currentUser.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Вы не являетесь разработчиком этой игры");
         }
+
+        try {
+            gameService.updateGame(id, request);
+        } catch (IOException e) {
+            log.warn("Не удалось прочитать изображение при редактировании игры {}", id, e);
+            return ResponseEntity.badRequest().body("Не удалось прочитать загруженное изображение");
+        }
+
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/developer/{userId}")

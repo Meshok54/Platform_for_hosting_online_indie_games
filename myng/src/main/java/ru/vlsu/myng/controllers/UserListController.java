@@ -1,6 +1,7 @@
 package ru.vlsu.myng.controllers;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,7 @@ import ru.vlsu.myng.services.UserService;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class UserListController {
@@ -44,7 +46,7 @@ public class UserListController {
             try {
                 roleEnum = User.Role.valueOf(role);
             } catch (IllegalArgumentException e) {
-                System.out.println("Invalid role value: " + role);
+                log.warn("Некорректное значение фильтра роли: {}", role);
             }
         }
 

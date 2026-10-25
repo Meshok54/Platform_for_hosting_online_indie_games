@@ -32,10 +32,12 @@ public class Review {
     @Column(nullable = false, columnDefinition = "SMALLINT UNSIGNED")
     private Integer reportCount = 0;
 
+    @ToString.Exclude
     @ManyToOne
     @JoinColumn(name = "fk_user", nullable = false)
     private User user;
 
+    @ToString.Exclude
     @ManyToOne
     @JoinColumn(name = "fk_game", nullable = false)
     private Game game;

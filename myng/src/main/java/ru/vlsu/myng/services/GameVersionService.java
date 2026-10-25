@@ -1,6 +1,7 @@
 package ru.vlsu.myng.services;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ import java.util.Comparator;
  * Файлы версий хранятся в файловой системе по пути,
  * указанному в свойстве {@code app.storage.path}.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GameVersionService {
@@ -57,9 +59,6 @@ public class GameVersionService {
 
     @Value("${app.storage.path}")
     private String storagePath;
-
-    @Value("${server.port}")
-    private String port;
 
     /**
      * Находит версию игры по идентификатору.
@@ -94,36 +93,28 @@ public class GameVersionService {
      * Определяет URL для запуска игры в браузере.
      *
      * <p>
-     * Ищет файл {@code index.html} в директории с файлами версии
-     * и формирует HTTP-ссылку для доступа к нему.
-     * </p>
-     *
-     * <p>
-     * Структура пути к файлам версии:
+     * Файлы версии лежат в директории:
      * </p>
      * <pre>
-     * {storagePath}/gamefiles/game_{gameId}/ver_{versionId}/index.html
+     * {storagePath}/gamefiles/game_{gameId}/ver_{versionId}/
      * </pre>
      *
      * <p>
-     * Результирующий URL имеет формат:
+     * и раздаются через {@code /static/**} (см. {@code WebConfig}).
+     * URL относительный, поэтому не зависит от хоста и порта сервера:
      * </p>
      * <pre>
-     * http://localhost:{port}/static/gamefiles/game_{gameId}/ver_{versionId}/index.html
+     * /static/gamefiles/game_{gameId}/ver_{versionId}/{entryPoint}
      * </pre>
      *
      * @param version версия игры. Не должна быть null.
      *
-     * @return полный URL для запуска игры в браузере.
-     *
-     * @throws RuntimeException если:
-     *         <ul>
-     *           <li>файл index.html не найден в директории версии;</li>
-     *           <li>произошла ошибка при обходе файловой системы.</li>
-     *         </ul>
+     * @return URL точки входа игры.
      */
     public String resolveEntryPoint(GameVersion version) {
-        return "http://localhost:" + port + "/static/gamefiles/game_" + version.getGame().getId() + "/ver_" + version.getId() + "/" + version.getEntryPoint(); // the path is most likely fucked up
+        return "/static/gamefiles/game_" + version.getGame().getId()
+                + "/ver_" + version.getId()
+                + "/" + version.getEntryPoint();
     }
 
     /**
@@ -171,6 +162,7 @@ public class GameVersionService {
      *         </ul>
      * @throws org.springframework.dao.DataAccessException при ошибке доступа к БД
      */
+    @Transactional
     public void publishGameVersion(PublishGameVersionRequest dto, User currentUser) {
         var game = gameService.getGameById(dto.getGameId());
 
@@ -179,8 +171,6 @@ public class GameVersionService {
         githubService.validateCommitExists(game.getRepo(), dto.getCommitHash());
         githubService.validateFilesExistInCommit(game.getRepo(), dto.getCommitHash(), dto.getFiles());
 
-        System.out.println("publishing gameversion with files: " + dto.getFiles());
-        
         GameVersion version = new GameVersion();
         version.setGame(game);
         version.setCommitHash(dto.getCommitHash());
@@ -257,15 +247,14 @@ public class GameVersionService {
 
         checkIsDeveloper(version.getGame(), currentUser);
 
-        Path versionPath = Paths.get("..", "storage", "gamefiles", "game_" + gameId, "ver_" + versionId);
+        Path versionPath = Paths.get(storagePath, "gamefiles", "game_" + gameId, "ver_" + versionId);
 
         if (Files.exists(versionPath)) {
-            try {
-                Files.walk(versionPath)
-                        .sorted(Comparator.reverseOrder())
+            try (Stream<Path> paths = Files.walk(versionPath)) {
+                paths.sorted(Comparator.reverseOrder())
                         .map(Path::toFile)
                         .forEach(File::delete);
-                System.out.println("Папка с файлами версии успешно удалена: " + versionPath.toAbsolutePath());
+                log.info("Удалены файлы версии игры: {}", versionPath.toAbsolutePath());
             } catch (IOException e) {
                 throw new RuntimeException("Не удалось удалить файлы версии с сервера: " + e.getMessage());
             }

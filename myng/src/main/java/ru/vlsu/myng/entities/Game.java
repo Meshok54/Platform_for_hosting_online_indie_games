@@ -33,10 +33,12 @@ public class Game {
     @Enumerated(EnumType.STRING)
     private Genre genre;
 
+    @ToString.Exclude
     @ManyToOne
     @JoinColumn(name = "fk_dev")
     private User developer;
 
+    @ToString.Exclude
     @Lob
     @Column(name = "image", columnDefinition = "MEDIUMBLOB")
     private byte[] image;
@@ -59,20 +61,24 @@ public class Game {
     @Column
     private Instant firstReleaseDate;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL)
     private List<GameVersion> versions = new ArrayList<>();
 
+    @ToString.Exclude
     @ManyToMany
     @JoinTable(name = "game_tag", joinColumns = @JoinColumn(name = "fk_game"), inverseJoinColumns = @JoinColumn(name = "fk_tag"))
     private Set<Tag> tags = new HashSet<>();
 
+    @ToString.Exclude
     @ManyToMany(mappedBy = "games")
     private Set<Collection> collections = new HashSet<>();
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL)
     private List<Review> reviews = new ArrayList<>();
 
-    // @ToString.Exclude
+    @ToString.Exclude
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL)
     private List<GameStats> stats = new ArrayList<>();
 

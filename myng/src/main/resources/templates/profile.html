@@ -815,7 +815,7 @@
                         const text = card.querySelector("textarea").value
                         const rating = card.querySelector(".rating-input").value
 
-                        await fetch(`/reviews/update/${id}`, {
+                        const response = await fetch(`/reviews/update/${id}`, {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json"
@@ -825,6 +825,12 @@
                                 rating: rating
                             })
                         })
+
+                        if (!response.ok) {
+                            const data = await response.json().catch(() => null)
+                            alert(data?.message || "Не удалось сохранить отзыв")
+                            return
+                        }
 
                         showTab("reviews-section")
                     }
