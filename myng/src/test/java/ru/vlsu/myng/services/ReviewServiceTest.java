@@ -146,9 +146,9 @@ class ReviewServiceTest {
 
         Review review = new Review();
         review.setId(100);
+        review.setGame(game);
         review.setRating((byte) 4);
 
-        when(reviewRepository.findGameById(100)).thenReturn(Optional.of(game));
         when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
 
         reviewService.delete(100);
@@ -156,7 +156,7 @@ class ReviewServiceTest {
         assertEquals(4, game.getRatingSum(), "Сумма рейтингов должна уменьшиться на 4");
         assertEquals(1, game.getReviewCount(), "Количество отзывов должно уменьшиться на 1");
         assertEquals(4.0, game.getAverageRating(), "Средний рейтинг должен стать 4.0 (4 / 1)");
-        verify(reviewRepository, times(1)).deleteById(100);
+        verify(reviewRepository, times(1)).delete(review);
     }
 
     @Test
@@ -168,9 +168,9 @@ class ReviewServiceTest {
 
         Review review = new Review();
         review.setId(100);
+        review.setGame(game);
         review.setRating((byte) 5);
 
-        when(reviewRepository.findGameById(100)).thenReturn(Optional.of(game));
         when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
 
         reviewService.delete(100);
@@ -178,7 +178,7 @@ class ReviewServiceTest {
         assertEquals(0, game.getReviewCount());
         assertEquals(0.0, game.getAverageRating(),
                 "Средний рейтинг должен сброситься в 0.0 во избежание деления на ноль");
-        verify(reviewRepository, times(1)).deleteById(100);
+        verify(reviewRepository, times(1)).delete(review);
     }
 
     // ==========================================
@@ -308,7 +308,7 @@ class ReviewServiceTest {
         assertThrows(AccessDeniedException.class,
                 () -> reviewService.deleteOwnReview(100, otherUser));
 
-        verify(reviewRepository, never()).deleteById(any());
+        verify(reviewRepository, never()).delete(any(Review.class));
     }
 
     @Test
@@ -321,12 +321,19 @@ class ReviewServiceTest {
         review.setUser(author);
         review.setRating((byte) 4);
 
+        Game game = new Game();
+        game.setRatingSum(4);
+        game.setReviewCount(1);
+        game.setAverageRating(4.0);
+        review.setGame(game);
+
         when(reviewRepository.findById(100)).thenReturn(Optional.of(review));
-        when(reviewRepository.findGameById(100)).thenReturn(Optional.empty());
 
         reviewService.deleteOwnReview(100, author);
 
-        verify(reviewRepository).deleteById(100);
+        verify(reviewRepository).delete(review);
+        assertEquals(0, game.getReviewCount());
+        assertEquals(0, game.getRatingSum());
     }
 
     @Test

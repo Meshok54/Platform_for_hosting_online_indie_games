@@ -10,6 +10,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultMatcher;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
@@ -39,16 +42,16 @@ class SecurityRulesTest {
     @Test
     @WithAnonymousUser
     void anonymous_CannotDeleteGameVersion() throws Exception {
-        mockMvc.perform(post("/games/1/versions/1"))
+        mockMvc.perform(post("/games/1/versions/1").with(csrf()))
                 .andExpect(REDIRECT_TO_LOGIN);
     }
 
     @Test
     @WithAnonymousUser
     void anonymous_CannotPublishGameOrVersion() throws Exception {
-        mockMvc.perform(post("/games/publish"))
+        mockMvc.perform(post("/games/publish").with(csrf()))
                 .andExpect(REDIRECT_TO_LOGIN);
-        mockMvc.perform(post("/games/publish/gamever"))
+        mockMvc.perform(post("/games/publish/gamever").with(csrf()))
                 .andExpect(REDIRECT_TO_LOGIN);
     }
 
@@ -79,9 +82,9 @@ class SecurityRulesTest {
     void user_CannotModerate() throws Exception {
         mockMvc.perform(get("/to-moderate"))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/to-moderate/approve/1"))
+        mockMvc.perform(post("/to-moderate/approve/1").with(csrf()))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/to-moderate/reject/1").param("reason", "x"))
+        mockMvc.perform(post("/to-moderate/reject/1").with(csrf()).param("reason", "x"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/mod-item/reviews/1"))
                 .andExpect(status().isForbidden());
@@ -90,11 +93,11 @@ class SecurityRulesTest {
     @Test
     @WithMockUser(roles = "USER")
     void user_CannotPublishOrEditGames() throws Exception {
-        mockMvc.perform(post("/games/publish"))
+        mockMvc.perform(post("/games/publish").with(csrf()))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/games/1/edit"))
+        mockMvc.perform(post("/games/1/edit").with(csrf()))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/games/1/versions/1"))
+        mockMvc.perform(post("/games/1/versions/1").with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -114,7 +117,35 @@ class SecurityRulesTest {
     void moderator_CannotOpenAdminPages() throws Exception {
         mockMvc.perform(get("/moderation-log"))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/user-list/change-role"))
+        mockMvc.perform(post("/user-list/change-role").with(csrf()))
                 .andExpect(status().isForbidden());
+    }
+
+    // ---------- CSRF ----------
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void postWithoutCsrfToken_IsRejected() throws Exception {
+        mockMvc.perform(post("/reviews/delete/1"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void postWithInvalidCsrfToken_IsRejected() throws Exception {
+        mockMvc.perform(post("/reviews/delete/1").with(csrf().useInvalidToken()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithAnonymousUser
+    void pages_ContainCsrfTokenForFormsAndFetch() throws Exception {
+        mockMvc.perform(get("/auth"))
+                .andExpect(status().isOk())
+                // мета-теги для fetch-запросов (layout.html)
+                .andExpect(content().string(containsString("<meta name=\"_csrf\" content=\"")))
+                .andExpect(content().string(containsString("<meta name=\"_csrf_header\" content=\"X-CSRF-TOKEN\"")))
+                // скрытое поле в форме входа
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
     }
 }

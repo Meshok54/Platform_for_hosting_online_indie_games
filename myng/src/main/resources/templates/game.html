@@ -815,10 +815,6 @@
           try {
             const response = await fetch(`/games/${gameId}/edit`, {
               method: "POST",
-              headers: {
-                "X-CSRF-TOKEN":
-                  document.querySelector('meta[name="_csrf"]')?.content,
-              },
               body: formData,
             });
 
@@ -1013,10 +1009,6 @@
               try {
                 const response = await fetch(`/reviews/${reviewId}/report`, {
                   method: "POST",
-                  headers: {
-                    "X-CSRF-TOKEN":
-                      document.querySelector('meta[name="_csrf"]')?.content,
-                  },
                 });
 
                 if (response.ok) {
@@ -1133,10 +1125,6 @@
             `/collections/${collectionId}/add-game/${gameId}`,
             {
               method: "POST",
-              headers: {
-                "X-CSRF-TOKEN":
-                  document.querySelector('meta[name="_csrf"]')?.content,
-              },
             },
           );
 
@@ -1293,14 +1281,9 @@
           return;
         }
 
-        // Создаем FormData или обычный URL-запрос. Сделаем через URL-запросы, так как параметров мало
+        // контроллер принимает POST (как и остальные изменяющие запросы сайта)
         const response = await fetch(`/games/${gameId}/versions/${versionId}`, {
-          method: "DELETE",
-          headers: {
-            // Если у вас настроена Spring Security CSRF защита, добавьте токен (как в game.html для коллекций):
-            "X-CSRF-TOKEN":
-              document.querySelector('meta[name="_csrf"]')?.content,
-          },
+          method: "POST",
         });
 
         const data = await response.json();

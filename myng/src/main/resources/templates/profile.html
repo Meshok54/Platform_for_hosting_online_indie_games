@@ -716,7 +716,6 @@
                           method: "POST",
                           headers: {
                             "Content-Type": "application/json"
-                            //"X-CSRF-TOKEN": document.querySelector('meta[name="_csrf"]').content // if Spring Security CSRF enabled
                           },
                           body: JSON.stringify({ name: newName })
                         });
@@ -1132,7 +1131,6 @@
                           method: "POST",
                           headers: {
                             "Content-Type": "application/json"
-                            //"X-CSRF-TOKEN": document.querySelector('meta[name="_csrf"]').content
                           },
                           body: JSON.stringify(data)
                         });
@@ -1188,7 +1186,7 @@
                   if (modalType === "logout") {
                     openModal("tpl-logout-confirm", async () => {
                       console.log("Кнопка выйти нажата");
-                      await fetch("profile/logout",
+                      await fetch("/profile/logout",
                         { method: "POST" });
                       window.location.href = "/";
                     });

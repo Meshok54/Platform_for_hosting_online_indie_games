@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <title th:text="${title} ?: 'My App'">My App</title>
 
+    <!-- CSRF-токен для fetch-запросов (подставляется в заголовок скриптом /js/csrf.js).
+         Обращение к токену здесь, в самом начале страницы, заодно гарантирует,
+         что он будет создан до начала отправки ответа -->
+    <meta name="_csrf" th:content="${_csrf?.token}" />
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}" />
+    <script src="/js/csrf.js"></script>
+
     <link rel="stylesheet" href="/main.css" />
 
     <!-- Font Awesome -->

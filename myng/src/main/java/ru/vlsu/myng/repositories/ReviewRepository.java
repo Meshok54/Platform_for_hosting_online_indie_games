@@ -274,31 +274,6 @@ public interface ReviewRepository extends JpaRepository<Review, Integer>, JpaSpe
      */
     boolean existsByGameAndUser(Game game, User user);
 
-    /**
-     * Возвращает игру, имеющую отзывы,
-     * по её идентификатору.
-     *
-     * <p>
-     * Поиск выполняется через сущность Review.
-     * </p>
-     *
-     * @param id идентификатор игры.
-     *           Не должен быть null.
-     *
-     * @return Optional с найденной игрой.
-     *         Возвращает Optional.empty(),
-     *         если игра не найдена
-     *         или не имеет отзывов.
-     *
-     * @throws IllegalArgumentException                    если id равен null
-     * @throws org.springframework.dao.DataAccessException
-     *                                                     при ошибке доступа к базе
-     *                                                     данных
-     */
-    @Query("""
-                SELECT r.game FROM Review r WHERE r.game.id = :id
-            """)
-    Optional<Game> findGameById(@Param("id") Integer id);
 
     /**
      * Возвращает список последних отзывов игры

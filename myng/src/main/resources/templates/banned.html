@@ -38,12 +38,15 @@
     </div>
 
     <!-- BUTTON (RED, SHARP) -->
-    <a href="/profile/logout"
-       class="inline-block bg-red-600 text-white border-2 border-red-600
-              px-10 py-4 text-lg font-bold uppercase tracking-widest
-              hover:bg-white hover:text-red-600 transition-none">
-        ВЫЙТИ
-    </a>
+    <!-- выход только через POST: так требует включённая CSRF-защита -->
+    <form th:action="@{/profile/logout}" method="post" class="inline-block">
+        <button type="submit"
+                class="inline-block bg-red-600 text-white border-2 border-red-600
+                       px-10 py-4 text-lg font-bold uppercase tracking-widest
+                       hover:bg-white hover:text-red-600 transition-none cursor-pointer">
+            ВЫЙТИ
+        </button>
+    </form>
 
     <!-- hidden end time -->
     <p id="endTime" th:text="${ban.endTime}" class="hidden"></p>

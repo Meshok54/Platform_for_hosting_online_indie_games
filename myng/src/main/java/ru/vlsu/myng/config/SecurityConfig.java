@@ -46,7 +46,8 @@ public class SecurityConfig {
                         String rememberMeKey) throws Exception {
                 http
                                 .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
-                                .csrf(csrf -> csrf.disable())
+                                // CSRF-защита включена (настройки по умолчанию): формы с th:action
+                                // получают токен автоматически, fetch-запросы — через /js/csrf.js
                                 .addFilterBefore(banFilter, UsernamePasswordAuthenticationFilter.class)
                                 // Правила проверяются сверху вниз, срабатывает первое совпавшее,
                                 // поэтому более узкие правила должны идти раньше широких

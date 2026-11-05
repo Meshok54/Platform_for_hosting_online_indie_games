@@ -219,25 +219,20 @@ public class ReviewService {
      * @param id идентификатор отзыва.
      *           Не должен быть null.
      *
-     * @throws IllegalArgumentException                    если отзыв или связанная игра не найдены
+     * @throws NotFoundException                           если отзыв не найден
      * @throws org.springframework.dao.DataAccessException
      *                                                     при ошибке доступа к базе данных
      */
     @Transactional
     public void delete(Integer id) {
-        var game = reviewRepository.findGameById(id);
-        var review = reviewRepository.findById(id);
-        if (game.isPresent() && review.isPresent()) {
-            var g = game.get();
-            g.setRatingSum(
-                    g.getRatingSum() - review.get().getRating());
+        Review review = getReviewById(id);
 
-            g.setReviewCount(
-                    g.getReviewCount() - 1);
+        Game game = review.getGame();
+        game.setRatingSum(game.getRatingSum() - review.getRating());
+        game.setReviewCount(game.getReviewCount() - 1);
+        recalculateAverageRating(game);
 
-            recalculateAverageRating(g);
-        }
-        reviewRepository.deleteById(id);
+        reviewRepository.delete(review);
     }
 
     /**
