@@ -56,6 +56,9 @@
           class="game-content w-full h-full flex items-center justify-center relative"
           style="background: white"
         >
+          <!-- Игра загружается с отдельного origin (app.games.base-url), поэтому
+               allow-same-origin даёт ей доступ только к её собственному origin
+               (например, к localStorage для сохранений), но не к страницам сайта -->
           <iframe
               th:src="${entryPoint}"
               sandbox="allow-scripts allow-same-origin allow-pointer-lock"

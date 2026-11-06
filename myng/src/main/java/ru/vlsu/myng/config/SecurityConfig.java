@@ -7,11 +7,13 @@ import ru.vlsu.myng.services.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -36,7 +38,48 @@ public class SecurityConfig {
                 return new BCryptPasswordEncoder();
         }
 
+        /**
+         * Правила для порта с файлами игр ({@code app.games.port}).
+         *
+         * <p>
+         * Здесь отдаются только статические файлы (что именно — решает
+         * {@link GameOriginFilter}), поэтому вход, сессии и CSRF не нужны.
+         * Cookie сайта на этот origin не приходят.
+         * </p>
+         *
+         * <p>
+         * Встраивать игру в iframe разрешено только страницам сайта
+         * (CSP {@code frame-ancestors}). Кэширование файлов игр не запрещается,
+         * чтобы повторный запуск не скачивал всё заново.
+         * </p>
+         */
         @Bean
+        @Order(1)
+        public SecurityFilterChain gameFilesFilterChain(
+                        HttpSecurity http,
+                        @Value("${app.games.port}") int gamesPort,
+                        @Value("${app.site.origins}") String siteOrigins) throws Exception {
+                http
+                                .securityMatcher(request -> request.getLocalPort() == gamesPort)
+                                .authorizeHttpRequests(authz -> authz.anyRequest().permitAll())
+                                .csrf(csrf -> csrf.disable())
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .requestCache(cache -> cache.disable())
+                                .headers(headers -> headers
+                                                .frameOptions(frame -> frame.disable())
+                                                .contentSecurityPolicy(csp -> csp
+                                                                .policyDirectives("frame-ancestors " + siteOrigins))
+                                                .cacheControl(cache -> cache.disable()));
+
+                return http.build();
+        }
+
+        /**
+         * Правила для основного сайта.
+         */
+        @Bean
+        @Order(2)
         public SecurityFilterChain filterChain(
                         HttpSecurity http,
                         // Ключ подписи cookie «Запомнить меня». Берётся из credentials.properties;
@@ -61,7 +104,6 @@ public class SecurityConfig {
                                                                 "/images/**",
                                                                 "/favicon.ico",
                                                                 "/__myng-storage-patch.js",
-                                                                "/static/gamefiles/**",
                                                                 "/.well-known/**",
                                                                 "/error")
                                                 .permitAll()

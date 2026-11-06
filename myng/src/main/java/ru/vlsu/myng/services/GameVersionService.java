@@ -60,6 +60,9 @@ public class GameVersionService {
     @Value("${app.storage.path}")
     private String storagePath;
 
+    @Value("${app.games.base-url}")
+    private String gamesBaseUrl;
+
     /**
      * Находит версию игры по идентификатору.
      *
@@ -100,11 +103,12 @@ public class GameVersionService {
      * </pre>
      *
      * <p>
-     * и раздаются через {@code /static/**} (см. {@code WebConfig}).
-     * URL относительный, поэтому не зависит от хоста и порта сервера:
+     * и раздаются через {@code /static/**} (см. {@code WebConfig})
+     * только с отдельного origin для игр ({@code app.games.base-url},
+     * см. {@code GameServerConfig}):
      * </p>
      * <pre>
-     * /static/gamefiles/game_{gameId}/ver_{versionId}/{entryPoint}
+     * {gamesBaseUrl}/static/gamefiles/game_{gameId}/ver_{versionId}/{entryPoint}
      * </pre>
      *
      * @param version версия игры. Не должна быть null.
@@ -112,7 +116,8 @@ public class GameVersionService {
      * @return URL точки входа игры.
      */
     public String resolveEntryPoint(GameVersion version) {
-        return "/static/gamefiles/game_" + version.getGame().getId()
+        return gamesBaseUrl
+                + "/static/gamefiles/game_" + version.getGame().getId()
                 + "/ver_" + version.getId()
                 + "/" + version.getEntryPoint();
     }

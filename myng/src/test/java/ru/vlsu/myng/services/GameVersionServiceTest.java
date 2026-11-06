@@ -61,10 +61,16 @@ class GameVersionServiceTest {
                 "storagePath",
                 tempDir.toString()
         );
+
+        ReflectionTestUtils.setField(
+                gameVersionService,
+                "gamesBaseUrl",
+                "http://127.0.0.1:8082"
+        );
     }
 
     @Test
-    void shouldResolveEntryPointAsRelativeUrl() {
+    void shouldResolveEntryPointOnGamesOrigin() {
         Game game = new Game();
         game.setId(7);
 
@@ -74,7 +80,7 @@ class GameVersionServiceTest {
         version.setEntryPoint("index.html");
 
         assertEquals(
-                "/static/gamefiles/game_7/ver_14/index.html",
+                "http://127.0.0.1:8082/static/gamefiles/game_7/ver_14/index.html",
                 gameVersionService.resolveEntryPoint(version)
         );
     }
