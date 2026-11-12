@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import ru.vlsu.myng.entities.User;
+import ru.vlsu.myng.utils.NotFoundException;
 import org.springframework.test.util.ReflectionTestUtils;
 import ru.vlsu.myng.dto.PublishGameVersionRequest;
 import ru.vlsu.myng.entities.Game;
@@ -305,5 +306,40 @@ class GameVersionServiceTest {
                 () -> gameVersionService.deleteGameVersion(7, 14, otherUser));
 
         verify(gameVersionRepository, never()).delete(any());
+    }
+
+    // ==========================================
+    // Запуск только одобренных версий
+    // ==========================================
+
+    private GameVersion versionWithVerdict(Boolean approved) {
+        GameVersion version = new GameVersion();
+        version.setId(14);
+        version.setGame(new Game());
+
+        ModerationVerdict verdict = new ModerationVerdict();
+        verdict.setApproved(approved);
+        version.setModerationVerdict(verdict);
+
+        return version;
+    }
+
+    @Test
+    void getApprovedGameVersion_ShouldReturnApprovedVersion() {
+        GameVersion version = versionWithVerdict(true);
+        when(gameVersionRepository.findById(14)).thenReturn(Optional.of(version));
+
+        assertSame(version, gameVersionService.getApprovedGameVersion(14));
+    }
+
+    @Test
+    void getApprovedGameVersion_ShouldHidePendingAndRejectedVersions() {
+        GameVersion pending = versionWithVerdict(null);
+        when(gameVersionRepository.findById(14)).thenReturn(Optional.of(pending));
+        assertThrows(NotFoundException.class, () -> gameVersionService.getApprovedGameVersion(14));
+
+        GameVersion rejected = versionWithVerdict(false);
+        when(gameVersionRepository.findById(15)).thenReturn(Optional.of(rejected));
+        assertThrows(NotFoundException.class, () -> gameVersionService.getApprovedGameVersion(15));
     }
 }

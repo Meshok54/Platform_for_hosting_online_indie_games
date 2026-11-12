@@ -19,8 +19,7 @@ import ru.vlsu.myng.services.UserService;
 import ru.vlsu.myng.repositories.CollectionRepository;
 import ru.vlsu.myng.repositories.ReviewRepository;
 
-import java.io.IOException;
-import java.nio.file.AccessDeniedException;
+import org.springframework.security.access.AccessDeniedException;
 import java.security.Principal;
 import java.util.List;
 
@@ -67,23 +66,11 @@ public class ProfileController {
         User currentUser = userService.findByEmail(principal.getName());
 
         if (!currentUser.getId().equals(id)) {
-            return ResponseEntity.badRequest().body("Нельзя редактировать чужой профиль");
+            throw new AccessDeniedException("Нельзя редактировать чужой профиль");
         }
 
-        User user = userService.findById(id);
-
-        user.setUsername(username);
-        user.setBio(about);
-
-        if (avatar != null && !avatar.isEmpty()) {
-            try {
-                user.setProfilePic(avatar.getBytes());
-            } catch (IOException e) {
-                return ResponseEntity.badRequest().body("Ошибка загрузки файла");
-            }
-        }
-
-        userService.save(user);
+        // проверки имени, описания и аватара — в UserService, ошибки отдаёт GlobalExceptionHandler
+        userService.updateProfile(currentUser, username, about, avatar);
 
         return ResponseEntity.ok().build();
     }

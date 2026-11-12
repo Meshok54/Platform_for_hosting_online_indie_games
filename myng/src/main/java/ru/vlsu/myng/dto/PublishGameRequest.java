@@ -23,7 +23,7 @@ public class PublishGameRequest {
 
     @NotBlank(message = "Ссылка на репозиторий обязательна")
     @Pattern(
-            regexp = "^https://github\\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+/?$",
+            regexp = "^https?://(www\\.)?github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+/?$",
             message = "Ссылка должна быть в формате https://github.com/user/repo"
     )
     //@UniqueRepo

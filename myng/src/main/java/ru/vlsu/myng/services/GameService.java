@@ -16,6 +16,7 @@ import ru.vlsu.myng.dto.CatalogGameDTO;
 import ru.vlsu.myng.dto.GameEditRequestDTO;
 import ru.vlsu.myng.dto.GameFilterDTO;
 import ru.vlsu.myng.dto.GamePageDTO;
+import ru.vlsu.myng.utils.GithubException;
 import ru.vlsu.myng.utils.NotFoundException;
 
 import java.io.IOException;
@@ -526,7 +527,7 @@ public class GameService {
 
         List<Review> recentReviews = reviewRepository.findRecentReviews(
                 game.getId(),
-                9,
+                ReviewService.REPORT_THRESHOLD - 1,
                 PageRequest.of(0, 5));
 
         Instant lastUpdateDate = latestVersion != null ? latestVersion.getCreatedAt() : null;
@@ -642,16 +643,9 @@ public class GameService {
                 status = "На модерации";
             }
 
-            int views = game.getStats().stream()
-                    .filter(s -> s.getEventType() == GameStats.EventType.view)
-                    .mapToInt(GameStats::getCount)
-                    .sum();
-
-            double rating = game.getReviews().isEmpty() ? 0.0
-                    : game.getReviews().stream()
-                            .mapToDouble(Review::getRating)
-                            .average()
-                            .orElse(0.0);
+            // те же счётчики, что на странице игры и в каталоге
+            int views = game.getTotalViews();
+            double rating = game.getAverageRating();
 
             String imageSrc = null;
 
@@ -708,15 +702,21 @@ public class GameService {
      */
     @Transactional
     public void publishGame(PublishGameRequest dto) {
-        githubService.validateRepoExists(dto.getRepoLink());
-        githubService.validateCommitExists(dto.getRepoLink(), dto.getCommitHash());
-        githubService.validateFilesExistInCommit(dto.getRepoLink(), dto.getCommitHash(), dto.getFiles());
+        String repoLink = GithubService.normalizeRepoUrl(dto.getRepoLink());
+
+        if (gameRepository.existsByRepo(repoLink)) {
+            throw new GithubException("repoLink", "Игра с таким репозиторием уже существует");
+        }
+
+        githubService.validateRepoExists(repoLink);
+        githubService.validateCommitExists(repoLink, dto.getCommitHash());
+        githubService.validateFilesExistInCommit(repoLink, dto.getCommitHash(), dto.getFiles());
 
         Game game = new Game();
 
         game.setName(dto.getTitle());
         game.setDescr(dto.getDescription());
-        game.setRepo(dto.getRepoLink());
+        game.setRepo(repoLink);
         try {
             var file = dto.getMainPic();
             if (file != null && !file.isEmpty() && file.getSize() > 0) {

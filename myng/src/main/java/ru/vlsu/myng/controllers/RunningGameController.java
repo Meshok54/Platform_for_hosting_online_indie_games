@@ -19,7 +19,7 @@ public class RunningGameController {
     @GetMapping("/running-game/{versionId}")
     public String runningGamePage(@PathVariable Integer versionId, Model model) {
 
-        GameVersion version = gameVersionService.getGameVersionById(versionId);
+        GameVersion version = gameVersionService.getApprovedGameVersion(versionId);
         String entryPoint = gameVersionService.resolveEntryPoint(version);
 
         gameService.incrementGameTotalLaunches(version.getGame());

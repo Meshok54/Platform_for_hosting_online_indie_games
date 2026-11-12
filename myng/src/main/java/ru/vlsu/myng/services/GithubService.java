@@ -24,6 +24,8 @@ import java.io.OutputStream;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -217,20 +219,46 @@ public class GithubService {
         }
     }
 
+    private static final String GITHUB_PREFIX = "https://github.com/";
+
+    private static final Pattern GITHUB_REPO_URL = Pattern.compile(
+            "^https?://(?:www\\.)?github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\\.git)?/?$");
+
     /**
-     * Извлекает путь репозитория из полного URL.
+     * Приводит ссылку на репозиторий к единому виду {@code https://github.com/owner/repo}.
      *
      * <p>
-     * Удаляет префикс {@code https://github.com/}
-     * и завершающий слеш (если есть).
+     * Допускаются {@code http://}, {@code www.}, окончание {@code .git}
+     * и завершающий слеш — все они ведут на один и тот же репозиторий.
+     * Единый вид нужен, чтобы один репозиторий нельзя было опубликовать дважды
+     * под разными написаниями ссылки.
      * </p>
      *
-     * @param url полный URL репозитория.
+     * @param url ссылка на репозиторий, как её ввёл пользователь.
+     *
+     * @return ссылка в виде {@code https://github.com/owner/repo}.
+     *
+     * @throws GithubException если ссылка не похожа на ссылку на репозиторий GitHub
+     */
+    public static String normalizeRepoUrl(String url) {
+        Matcher matcher = GITHUB_REPO_URL.matcher(url == null ? "" : url.trim());
+
+        if (!matcher.matches()) {
+            throw new GithubException("repoLink", "Ссылка должна быть в формате https://github.com/user/repo");
+        }
+
+        return GITHUB_PREFIX + matcher.group(1) + "/" + matcher.group(2);
+    }
+
+    /**
+     * Извлекает путь репозитория из ссылки.
+     *
+     * @param url ссылка на репозиторий (в любом из видов, допустимых {@link #normalizeRepoUrl}).
      *
      * @return путь в формате "owner/repo".
      */
     private String extractPath(String url) {
-        return url.replace("https://github.com/", "").replaceAll("/$", "");
+        return normalizeRepoUrl(url).substring(GITHUB_PREFIX.length());
     }
 
     /**

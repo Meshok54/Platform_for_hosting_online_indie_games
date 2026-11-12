@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import ru.vlsu.myng.entities.User;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.List;
 
@@ -162,6 +163,11 @@ public interface UserRepository extends JpaRepository<User, Integer> {
      * @param role роль пользователя.
      *             Может быть null.
      *
+     * @param status статус блокировки: "blocked" — только заблокированные на момент now,
+     *               "active" — только незаблокированные. null или пустая строка — все.
+     *
+     * @param now момент времени, на который проверяется блокировка.
+     *
      * @param pageable параметры пагинации и сортировки.
      *                 Не должен быть null.
      *
@@ -178,9 +184,17 @@ public interface UserRepository extends JpaRepository<User, Integer> {
             "(:search IS NULL OR :search = '' OR " +
             "LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
-            "(:role IS NULL OR :role = '' OR u.role = :role)")
+            "(:role IS NULL OR :role = '' OR u.role = :role) AND " +
+            // фильтр по блокировке выполняется в БД, чтобы пагинация считалась правильно
+            "(:status IS NULL OR :status = '' " +
+            " OR (:status = 'blocked' AND EXISTS (SELECT b FROM Ban b WHERE b.user = u " +
+            "     AND b.startTime < :now AND b.endTime > :now)) " +
+            " OR (:status = 'active' AND NOT EXISTS (SELECT b FROM Ban b WHERE b.user = u " +
+            "     AND b.startTime < :now AND b.endTime > :now)))")
     Page<User> findWithFilters(
             @Param("search") String search,
             @Param("role") User.Role role,
+            @Param("status") String status,
+            @Param("now") Instant now,
             Pageable pageable);
 }

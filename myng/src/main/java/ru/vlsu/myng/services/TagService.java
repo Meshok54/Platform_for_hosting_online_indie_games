@@ -7,6 +7,7 @@ import ru.vlsu.myng.entities.Tag;
 import ru.vlsu.myng.repositories.TagRepository;
 
 import java.util.Arrays;
+import java.util.regex.Pattern;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -115,13 +116,26 @@ public class TagService {
                 .collect(Collectors.toSet());
     }
     
+    /**
+     * Тот же формат, что проверяет ограничение chk_tag_format в БД.
+     */
+    private static final Pattern TAG_FORMAT = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
+
     private String normalize(String tag) {
         if (tag == null || tag.isBlank()) {
-            throw new IllegalArgumentException("Tag cannot be null or empty");
+            throw new IllegalArgumentException("Тег не может быть пустым");
         }
 
-        return tag.trim()
+        String name = tag.trim()
                 .toLowerCase()
                 .replace(" ", "-");
+
+        // проверяем здесь, иначе тег отклонит БД и пользователь получит ошибку 500
+        if (!TAG_FORMAT.matcher(name).matches()) {
+            throw new IllegalArgumentException("Тег «" + tag.trim()
+                    + "» может содержать только латинские буквы, цифры и дефисы между ними");
+        }
+
+        return name;
     }
 }

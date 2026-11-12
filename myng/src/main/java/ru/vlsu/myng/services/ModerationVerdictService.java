@@ -47,6 +47,7 @@ public class ModerationVerdictService {
     private final UserService userService;
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
+    private final ReviewService reviewService;
 
     /**
      * Сохраняет или обновляет решение модерации в базе данных.
@@ -159,7 +160,7 @@ public class ModerationVerdictService {
             notificationText = String.format(
                     "Ваш отзыв на игру \"%s\" прошел модерацию и не удален",
                     gameName);
-            review.setReportCount(0);
+            reviewService.restoreAfterModeration(review);
         }
 
         verdict.setApproved(true);

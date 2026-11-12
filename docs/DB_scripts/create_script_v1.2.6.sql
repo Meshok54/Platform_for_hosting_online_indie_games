@@ -4,9 +4,13 @@
 -- ------------------------------------------------------
 -- Server version	9.2.0
 
-CREATE DATABASE `myngdb`
+CREATE DATABASE IF NOT EXISTS `myngdb` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE `myngdb`;
+
+-- Таблицы идут по алфавиту, а не в порядке зависимостей,
+-- поэтому на время создания проверка внешних ключей отключена
+SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `ban`;
 CREATE TABLE `ban` (
@@ -22,7 +26,7 @@ CREATE TABLE `ban` (
   CONSTRAINT `fk_ban_mod` FOREIGN KEY (`fk_mod`) REFERENCES `user` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_ban_user` FOREIGN KEY (`fk_user`) REFERENCES `user` (`id`) ON DELETE CASCADE,
   CONSTRAINT `chk_ban_time` CHECK ((`end_time` > `start_time`))
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `collection`;
 CREATE TABLE `collection` (
@@ -31,10 +35,9 @@ CREATE TABLE `collection` (
   `fk_user` int NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`,`fk_user`),
-  UNIQUE KEY `UK6vjuabomp889944wcn0fmo9my` (`name`,`fk_user`),
   KEY `fk_collection_user` (`fk_user`),
   CONSTRAINT `fk_collection_user` FOREIGN KEY (`fk_user`) REFERENCES `user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `dev_application`;
 CREATE TABLE `dev_application` (
@@ -46,7 +49,7 @@ CREATE TABLE `dev_application` (
   PRIMARY KEY (`id`),
   KEY `fk_dev_app_user` (`fk_user`),
   CONSTRAINT `fk_dev_app_user` FOREIGN KEY (`fk_user`) REFERENCES `user` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `game`;
 CREATE TABLE `game` (
@@ -66,7 +69,7 @@ CREATE TABLE `game` (
   PRIMARY KEY (`id`),
   KEY `fk_game_dev` (`fk_dev`),
   CONSTRAINT `fk_game_dev` FOREIGN KEY (`fk_dev`) REFERENCES `user` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=80 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `game_collection`;
 CREATE TABLE `game_collection` (
@@ -87,7 +90,6 @@ CREATE TABLE `game_stats` (
   `count` int NOT NULL DEFAULT '1' COMMENT 'Количество событий за день',
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_daily_stat` (`fk_game`,`event_type`,`event_date`),
-  UNIQUE KEY `UK5vnoomkhval8yaheu6vc67h2b` (`fk_game`,`event_type`,`event_date`),
   KEY `idx_game_stats_game` (`fk_game`),
   KEY `idx_game_stats_date` (`event_date`),
   CONSTRAINT `fk_game_stats_game` FOREIGN KEY (`fk_game`) REFERENCES `game` (`id`) ON DELETE CASCADE
@@ -115,10 +117,9 @@ CREATE TABLE `game_version` (
   `entry_point` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `fk_game` (`fk_game`,`commit_hash`),
-  UNIQUE KEY `UK9qvp580h5d1chghhll8tbwcg9` (`fk_game`,`commit_hash`),
   KEY `idx_game_version_game_created` (`created_at`),
   CONSTRAINT `fk_game_version_game` FOREIGN KEY (`fk_game`) REFERENCES `game` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `moderation_verdict`;
 CREATE TABLE `moderation_verdict` (
@@ -139,7 +140,7 @@ CREATE TABLE `moderation_verdict` (
   CONSTRAINT `fk_moderation_review` FOREIGN KEY (`fk_review`) REFERENCES `review` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_moderation_verdict_mod` FOREIGN KEY (`fk_mod`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `chk_moderation_one_target` CHECK (((((`fk_game_version` is not null) + (`fk_dev_application` is not null)) + (`fk_review` is not null)) = 1))
-) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `notification`;
 CREATE TABLE `notification` (
@@ -148,7 +149,7 @@ CREATE TABLE `notification` (
   `type` enum('system','warning','moderation','news') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `text` text COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `review`;
 CREATE TABLE `review` (
@@ -161,12 +162,11 @@ CREATE TABLE `review` (
   `fk_game` int NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `fk_user` (`fk_user`,`fk_game`),
-  UNIQUE KEY `UK5yhc114orr9t3gtj8k6w5te48` (`fk_user`,`fk_game`),
   KEY `fk_review_game` (`fk_game`),
   CONSTRAINT `fk_review_game` FOREIGN KEY (`fk_game`) REFERENCES `game` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_review_user` FOREIGN KEY (`fk_user`) REFERENCES `user` (`id`) ON DELETE CASCADE,
   CONSTRAINT `chk_review_rating` CHECK ((`rating` between 1 and 5))
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `tag`;
 CREATE TABLE `tag` (
@@ -174,9 +174,8 @@ CREATE TABLE `tag` (
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),
-  UNIQUE KEY `UK1wdpsed5kna2y38hnbgrnhi5b` (`name`),
   CONSTRAINT `chk_tag_format` CHECK (regexp_like(`name`,_utf8mb4'^[a-z0-9]+(-[a-z0-9]+)*$'))
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `user`;
 CREATE TABLE `user` (
@@ -191,10 +190,8 @@ CREATE TABLE `user` (
   `github_username` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
-  UNIQUE KEY `UKsb8bbouer5wak8vyiiy4pf2bx` (`username`),
-  UNIQUE KEY `github_username` (`github_username`),
-  UNIQUE KEY `UKc69xt3bjyunxrgrss6kw9o5s3` (`github_username`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  UNIQUE KEY `github_username` (`github_username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `user_notification`;
 CREATE TABLE `user_notification` (
@@ -217,6 +214,8 @@ CREATE TABLE `warning` (
   KEY `fk_warning_user` (`fk_user`),
   CONSTRAINT `fk_warning_mod` FOREIGN KEY (`fk_mod`) REFERENCES `user` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_warning_user` FOREIGN KEY (`fk_user`) REFERENCES `user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- Dump completed on 2026-06-15  3:34:28

@@ -236,10 +236,15 @@ class ReviewServiceTest {
         User author = new User();
         Game game = new Game();
         game.setName("Тестовая Игра");
+        // у игры два отзыва: 5 (этот) и 3
+        game.setRatingSum(8);
+        game.setReviewCount(2);
+        game.setAverageRating(4.0);
 
         Review review = new Review();
         review.setId(50);
         review.setReportCount(9);
+        review.setRating((byte) 5);
         review.setUser(author);
         review.setGame(game);
 
@@ -249,6 +254,12 @@ class ReviewServiceTest {
         reviewService.incrementReportCount(50);
 
         assertEquals(10, review.getReportCount());
+        assertTrue(ReviewService.isHidden(review));
+
+        // скрытый отзыв исключается из рейтинга игры
+        assertEquals(3, game.getRatingSum());
+        assertEquals(1, game.getReviewCount());
+        assertEquals(3.0, game.getAverageRating());
 
         ArgumentCaptor<ModerationVerdict> verdictCaptor = ArgumentCaptor.forClass(ModerationVerdict.class);
         verify(verdictRepository, times(1)).save(verdictCaptor.capture());
@@ -366,5 +377,94 @@ class ReviewServiceTest {
         when(reviewRepository.findById(999)).thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class, () -> reviewService.getReviewById(999));
+    }
+
+    // ==========================================
+    // Скрытые отзывы и рейтинг игры
+    // ==========================================
+
+    private Review hiddenReview(Game game, User author) {
+        Review review = new Review();
+        review.setId(70);
+        review.setRating((byte) 1);
+        review.setReportCount(ReviewService.REPORT_THRESHOLD);
+        review.setUser(author);
+        review.setGame(game);
+        return review;
+    }
+
+    @Test
+    void incrementReportCount_ShouldIgnoreReports_WhenReviewAlreadyHidden() {
+        Game game = new Game();
+        Review review = hiddenReview(game, new User());
+
+        when(reviewRepository.findById(70)).thenReturn(Optional.of(review));
+
+        reviewService.incrementReportCount(70);
+
+        assertEquals(ReviewService.REPORT_THRESHOLD, review.getReportCount(),
+                "Новые жалобы не должны снова показывать скрытый отзыв");
+        verify(reviewRepository, never()).save(any());
+        verifyNoInteractions(verdictRepository);
+    }
+
+    @Test
+    void delete_ShouldNotChangeRating_WhenReviewIsHidden() {
+        Game game = new Game();
+        game.setRatingSum(9);
+        game.setReviewCount(2);
+        game.setAverageRating(4.5);
+
+        Review review = hiddenReview(game, new User());
+        when(reviewRepository.findById(70)).thenReturn(Optional.of(review));
+
+        reviewService.delete(70);
+
+        assertEquals(9, game.getRatingSum(), "Скрытый отзыв уже исключён из рейтинга");
+        assertEquals(2, game.getReviewCount());
+        verify(reviewRepository).delete(review);
+    }
+
+    @Test
+    void updateReview_ShouldNotChangeRating_WhenReviewIsHidden() {
+        User author = new User();
+        author.setId(1);
+
+        Game game = new Game();
+        game.setRatingSum(9);
+        game.setReviewCount(2);
+        game.setAverageRating(4.5);
+
+        Review review = hiddenReview(game, author);
+
+        ReviewUpdate dto = new ReviewUpdate();
+        dto.setRating((byte) 5);
+        dto.setText("Исправленный текст отзыва");
+
+        when(reviewRepository.findById(70)).thenReturn(Optional.of(review));
+
+        reviewService.updateReview(70, dto, author);
+
+        assertEquals(9, game.getRatingSum());
+        assertEquals(2, game.getReviewCount());
+        assertEquals((byte) 5, review.getRating());
+    }
+
+    @Test
+    void restoreAfterModeration_ShouldReturnReviewToRating() {
+        Game game = new Game();
+        game.setRatingSum(9);
+        game.setReviewCount(2);
+        game.setAverageRating(4.5);
+
+        Review review = hiddenReview(game, new User());
+
+        reviewService.restoreAfterModeration(review);
+
+        assertEquals(0, review.getReportCount());
+        assertFalse(ReviewService.isHidden(review));
+        assertEquals(10, game.getRatingSum());
+        assertEquals(3, game.getReviewCount());
+        verify(reviewRepository).save(review);
     }
 }

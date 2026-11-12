@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.vlsu.myng.dto.UserRegistrationDto;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.UserRepository;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.Instant;
 
 /**
@@ -24,6 +26,12 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
+    /** Совпадает с длиной колонки user.username в БД. */
+    public static final int USERNAME_MAX_LENGTH = 20;
+
+    /** Совпадает с длиной колонки user.bio в БД. */
+    public static final int BIO_MAX_LENGTH = 255;
+
 
     /**
      * Регистрирует нового пользователя в системе.
@@ -33,6 +41,7 @@ public class UserService {
      * <ul>
      *     <li>подтверждение пароля;</li>
      *     <li>минимальная длина пароля (>= 6 символов);</li>
+     *     <li>имя пользователя не пустое и не длиннее {@link #USERNAME_MAX_LENGTH} символов;</li>
      *     <li>уникальность username;</li>
      *     <li>уникальность email.</li>
      * </ul>
@@ -67,6 +76,8 @@ public class UserService {
         if (registrationDto.getPassword() == null || registrationDto.getPassword().length() < 6) {
             throw new RuntimeException("Пароль должен быть не менее 6 символов");
         }
+
+        validateUsername(registrationDto.getUsername());
 
         if (userRepository.existsByUsername(registrationDto.getUsername())) {
             throw new RuntimeException("Имя пользователя уже занято");
@@ -178,6 +189,68 @@ public class UserService {
     /**
      * Сохранение пользователя.
      */
+    /**
+     * Обновляет профиль пользователя: имя, описание и (необязательно) аватар.
+     *
+     * @param user     пользователь, чей профиль изменяется. Не должен быть null.
+     * @param username новое имя пользователя.
+     * @param bio      новое описание профиля. Может быть null.
+     * @param avatar   новый аватар. Может быть null или пустым — тогда аватар не меняется.
+     *
+     * @throws IllegalArgumentException если имя пустое, слишком длинное или занято,
+     *                                  описание слишком длинное или аватар не изображение
+     * @throws IllegalStateException    если не удалось прочитать файл аватара
+     */
+    @Transactional
+    public User updateProfile(User user, String username, String bio, MultipartFile avatar) {
+        String newUsername = username == null ? null : username.trim();
+        validateUsername(newUsername);
+
+        if (!newUsername.equals(user.getUsername()) && userRepository.existsByUsername(newUsername)) {
+            throw new IllegalArgumentException("Имя пользователя уже занято");
+        }
+
+        String newBio = bio == null ? "" : bio.trim();
+        if (newBio.length() > BIO_MAX_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Описание профиля не должно превышать " + BIO_MAX_LENGTH + " символов");
+        }
+
+        if (avatar != null && !avatar.isEmpty()) {
+            String contentType = avatar.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw new IllegalArgumentException("Аватар должен быть изображением");
+            }
+
+            try {
+                user.setProfilePic(avatar.getBytes());
+            } catch (IOException e) {
+                throw new IllegalStateException("Не удалось прочитать файл аватара", e);
+            }
+        }
+
+        user.setUsername(newUsername);
+        user.setBio(newBio);
+
+        return userRepository.save(user);
+    }
+
+    /**
+     * Проверяет имя пользователя: не пустое и помещается в колонку БД.
+     *
+     * @throws IllegalArgumentException если имя некорректно
+     */
+    private void validateUsername(String username) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Имя пользователя не может быть пустым");
+        }
+
+        if (username.length() > USERNAME_MAX_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Имя пользователя не должно превышать " + USERNAME_MAX_LENGTH + " символов");
+        }
+    }
+
     @Transactional
     public User save(User user) {
         return userRepository.save(user);

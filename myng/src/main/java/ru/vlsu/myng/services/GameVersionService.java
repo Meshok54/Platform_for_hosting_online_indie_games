@@ -80,6 +80,29 @@ public class GameVersionService {
     }
 
     /**
+     * Находит версию игры, которую можно запускать: она должна быть одобрена модератором.
+     * Файлы версии скачиваются только при одобрении, а неодобренная или отклонённая
+     * версия не должна быть доступна игрокам даже по прямой ссылке.
+     *
+     * @param id идентификатор версии игры. Не должен быть null.
+     *
+     * @return одобренная версия игры.
+     *
+     * @throws NotFoundException если версии нет или она не одобрена
+     */
+    @Transactional(readOnly = true)
+    public GameVersion getApprovedGameVersion(Integer id) {
+        GameVersion version = getGameVersionById(id);
+        ModerationVerdict verdict = version.getModerationVerdict();
+
+        if (verdict == null || !Boolean.TRUE.equals(verdict.getApproved())) {
+            throw new NotFoundException("Версия игры не найдена или ещё не прошла модерацию");
+        }
+
+        return version;
+    }
+
+    /**
      * Проверяет, что пользователь — разработчик указанной игры.
      *
      * @throws AccessDeniedException если игра принадлежит другому разработчику

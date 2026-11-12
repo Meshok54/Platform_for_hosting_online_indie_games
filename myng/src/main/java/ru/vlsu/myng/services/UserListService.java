@@ -2,7 +2,6 @@ package ru.vlsu.myng.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +17,6 @@ import ru.vlsu.myng.repositories.WarningRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -73,33 +71,10 @@ public class UserListService {
      */
     @Transactional(readOnly = true)
     public UserListData getUserListWithBannedStatus(Pageable pageable, String search, User.Role role, String status) {
-        Page<User> usersPage = userRepository.findWithFilters(search, role, pageable);
+        Page<User> usersPage = userRepository.findWithFilters(
+                search, role, status, Instant.now(), pageable);
 
-        Page<User> resultPage;
-        Map<Integer, Boolean> resultBannedMap;
-
-        if (status != null && !status.isEmpty()) {
-            Map<Integer, Boolean> currentBannedMap = getBannedStatusForUsers(usersPage.getContent());
-
-            List<User> filteredUsers = usersPage.getContent().stream()
-                    .filter(user -> {
-                        boolean isBanned = currentBannedMap.getOrDefault(user.getId(), false);
-                        return status.equals("blocked") ? isBanned : !isBanned;
-                    })
-                    .collect(Collectors.toList());
-
-            resultPage = new PageImpl<>(
-                    filteredUsers,
-                    pageable,
-                    filteredUsers.size());
-
-            resultBannedMap = getBannedStatusForUsers(filteredUsers);
-        } else {
-            resultPage = usersPage;
-            resultBannedMap = getBannedStatusForUsers(usersPage.getContent());
-        }
-
-        return new UserListData(resultPage, resultBannedMap);
+        return new UserListData(usersPage, getBannedStatusForUsers(usersPage.getContent()));
     }
 
     /**

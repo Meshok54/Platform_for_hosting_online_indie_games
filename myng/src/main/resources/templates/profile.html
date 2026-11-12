@@ -632,11 +632,12 @@
                   });
 
                   if (response.ok) {
-                    usernameText.textContent = usernameInput.value;
-                    aboutText.textContent = aboutInput.value;
+                    usernameText.textContent = usernameInput.value.trim();
+                    aboutText.textContent = aboutInput.value.trim();
                     cancelBtn.click();
                   } else {
-                    console.error("Ошибка при сохранении профиля");
+                    const data = await response.json().catch(() => null);
+                    alert(data?.message || "Не удалось сохранить профиль");
                   }
               });
 
@@ -1139,8 +1140,8 @@
                           console.log("Dev application submitted successfully");
                           closeModal();
                         } else {
-                          console.log("Failed to submit dev application");
-                          alert("Ошибка: вы уже подали заявку");
+                          const result = await response.json().catch(() => null);
+                          alert(result?.message || "Не удалось отправить заявку");
                         }
                     });
 

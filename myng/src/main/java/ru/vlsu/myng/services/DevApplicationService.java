@@ -2,10 +2,14 @@ package ru.vlsu.myng.services;
 
 import lombok.RequiredArgsConstructor;
 import ru.vlsu.myng.entities.DevApplication;
+import ru.vlsu.myng.entities.ModerationVerdict;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.DevApplicationRepository;
+import ru.vlsu.myng.repositories.ModerationVerdictRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -28,6 +32,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DevApplicationService {
     private final DevApplicationRepository repo;
+    private final ModerationVerdictRepository verdictRepository;
 
     /**
      * Сохраняет заявку на становление разработчиком в базе данных.
@@ -85,5 +90,47 @@ public class DevApplicationService {
      */
     public List<DevApplication> findByUser(User u) {
         return repo.findByUser(u);
+    }
+
+    /**
+     * Принимает заявку пользователя на получение роли разработчика
+     * и отправляет её на модерацию.
+     *
+     * @param user           пользователь, подающий заявку. Не должен быть null.
+     * @param githubUsername имя пользователя на GitHub.
+     * @param text           текст заявки.
+     *
+     * @return сохранённая заявка.
+     *
+     * @throws IllegalStateException если у пользователя уже есть права разработчика
+     *                               (или выше) либо его заявка уже на рассмотрении
+     */
+    @Transactional
+    public DevApplication submit(User user, String githubUsername, String text) {
+        if (user.getRole() != User.Role.user) {
+            throw new IllegalStateException("У вас уже есть права разработчика");
+        }
+
+        // отдельный запрос на каждую заявку (N+1), но заявок у пользователя единицы
+        boolean hasPending = repo.findByUser(user).stream()
+                .map(verdictRepository::findByDevApplication)
+                .anyMatch(verdict -> verdict.isPresent() && verdict.get().getApproved() == null);
+
+        if (hasPending) {
+            throw new IllegalStateException("Ваша заявка уже на рассмотрении");
+        }
+
+        DevApplication app = new DevApplication();
+        app.setUser(user);
+        app.setCreatedAt(Instant.now());
+        app.setGithubUsername(githubUsername);
+        app.setText(text);
+        repo.save(app);
+
+        ModerationVerdict verdict = new ModerationVerdict();
+        verdict.setDevApplication(app);
+        verdictRepository.save(verdict);
+
+        return app;
     }
 }

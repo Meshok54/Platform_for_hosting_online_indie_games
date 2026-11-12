@@ -35,6 +35,19 @@ public class ReviewService {
     private final ModerationVerdictRepository verdictRepository;
 
     /**
+     * Количество жалоб, после которого отзыв скрывается и отправляется на модерацию.
+     */
+    public static final int REPORT_THRESHOLD = 10;
+
+    /**
+     * Скрыт ли отзыв (набрал порог жалоб и ждёт модерации или отклонён модератором).
+     * Скрытые отзывы не показываются и не учитываются в рейтинге игры.
+     */
+    public static boolean isHidden(Review review) {
+        return review.getReportCount() >= REPORT_THRESHOLD;
+    }
+
+    /**
      * Обновляет текст и рейтинг отзыва.
      *
      * <p>
@@ -70,9 +83,11 @@ public class ReviewService {
         review.setText(dto.getText().trim());
         review.setRating(dto.getRating());
 
-        Game game = review.getGame();
-        game.setRatingSum(game.getRatingSum() - oldRating + dto.getRating());
-        recalculateAverageRating(game);
+        if (!isHidden(review)) {
+            Game game = review.getGame();
+            game.setRatingSum(game.getRatingSum() - oldRating + dto.getRating());
+            recalculateAverageRating(game);
+        }
 
         reviewRepository.save(review);
     }
@@ -91,6 +106,26 @@ public class ReviewService {
         if (text == null || text.trim().length() < 10) {
             throw new IllegalArgumentException("Текст отзыва должен содержать минимум 10 символов");
         }
+    }
+
+    /**
+     * Учитывает оценку отзыва в рейтинге игры.
+     */
+    private void addToGameRating(Review review) {
+        Game game = review.getGame();
+        game.setRatingSum(game.getRatingSum() + review.getRating());
+        game.setReviewCount(game.getReviewCount() + 1);
+        recalculateAverageRating(game);
+    }
+
+    /**
+     * Убирает оценку отзыва из рейтинга игры.
+     */
+    private void removeFromGameRating(Review review) {
+        Game game = review.getGame();
+        game.setRatingSum(game.getRatingSum() - review.getRating());
+        game.setReviewCount(game.getReviewCount() - 1);
+        recalculateAverageRating(game);
     }
 
     /**
@@ -227,10 +262,10 @@ public class ReviewService {
     public void delete(Integer id) {
         Review review = getReviewById(id);
 
-        Game game = review.getGame();
-        game.setRatingSum(game.getRatingSum() - review.getRating());
-        game.setReviewCount(game.getReviewCount() - 1);
-        recalculateAverageRating(game);
+        // скрытый отзыв уже исключён из рейтинга
+        if (!isHidden(review)) {
+            removeFromGameRating(review);
+        }
 
         reviewRepository.delete(review);
     }
@@ -298,13 +333,7 @@ public class ReviewService {
         review.setCreatedAt(Instant.now());
         review.setReportCount(0);
 
-        game.setRatingSum(
-                game.getRatingSum() + review.getRating());
-
-        game.setReviewCount(
-                game.getReviewCount() + 1);
-
-        recalculateAverageRating(game);
+        addToGameRating(review);
 
         return reviewRepository.save(review);
     }
@@ -313,17 +342,17 @@ public class ReviewService {
      * Увеличивает количество жалоб на отзыв.
      *
      * <p>
-     * Если количество жалоб достигает порога (10+),
-     * создаётся или проверяется модерационный вердикт:
+     * Если количество жалоб достигает порога ({@link #REPORT_THRESHOLD}):
      * <ul>
-     *     <li>если вердикт отсутствует — создаётся новый;</li>
-     *     <li>если уже существует — счётчик сбрасывается.</li>
+     *     <li>если отзыв ещё не проверялся модератором — он скрывается,
+     *         исключается из рейтинга игры, создаётся вердикт на модерацию
+     *         и автору отправляется предупреждение;</li>
+     *     <li>если модератор уже оставил этот отзыв — счётчик сбрасывается.</li>
      * </ul>
      * </p>
      *
      * <p>
-     * При первом достижении порога также создаётся
-     * предупреждающее уведомление автору отзыва.
+     * Жалобы на уже скрытый отзыв (ждёт модерации или отклонён) не учитываются.
      * </p>
      *
      * @param id идентификатор отзыва.
@@ -338,14 +367,20 @@ public class ReviewService {
         Review review = reviewRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Отзыв не найден с id: " + id));
 
+        if (isHidden(review)) {
+            return;
+        }
+
         review.setReportCount(review.getReportCount() + 1);
         reviewRepository.save(review);
 
-        if (review.getReportCount() >= 10) {
+        if (review.getReportCount() >= REPORT_THRESHOLD) {
 
             boolean verdictExists = verdictRepository.existsByReview(review);
 
             if (!verdictExists) {
+                removeFromGameRating(review);
+
                 ModerationVerdict verdict = new ModerationVerdict();
                 verdict.setReview(review);
                 verdict.setApproved(null);
@@ -363,9 +398,26 @@ public class ReviewService {
                 createWarningNotification(reviewAuthor, notificationText);
 
             } else {
+                // модератор уже проверил отзыв и оставил его
                 review.setReportCount(0);
             }
         }
+    }
+
+    /**
+     * Возвращает отзыв на сайт после того, как модератор решил его оставить:
+     * сбрасывает жалобы и снова учитывает оценку в рейтинге игры.
+     *
+     * @param review отзыв, одобренный модератором. Не должен быть null.
+     */
+    @Transactional
+    public void restoreAfterModeration(Review review) {
+        if (isHidden(review)) {
+            addToGameRating(review);
+        }
+
+        review.setReportCount(0);
+        reviewRepository.save(review);
     }
 
     /**
@@ -402,7 +454,7 @@ public class ReviewService {
     public List<Review> findByGameOrderByCreatedAtDesc(Game game, PageRequest pageable) {
         return reviewRepository.findRecentReviews(
                 game.getId(),
-                9,
+                REPORT_THRESHOLD - 1,
                 pageable);
     }
 }
