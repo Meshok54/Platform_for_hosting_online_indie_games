@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import ru.vlsu.myng.utils.ImageType;
 import ru.vlsu.myng.dto.MyGame;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.entities.Review;
@@ -43,15 +45,23 @@ public class ProfileController {
     }
 
     @GetMapping("/profile/{id}/avatar")
-    @ResponseBody
-    public byte[] getAvatar(@PathVariable("id") Integer id) {
+    public ResponseEntity<byte[]> getAvatar(@PathVariable("id") Integer id) {
         User user = userService.findById(id);
+        byte[] avatar = user.getProfilePic();
 
-        if (user.getProfilePic() != null && user.getProfilePic().length > 0) {
-            return user.getProfilePic();
+        // Тип ответа задаётся явно и только из списка форматов изображений.
+        // Иначе Spring подбирает Content-Type по заголовку Accept, и файл,
+        // открытый по прямой ссылке, отдавался бы как text/html (XSS)
+        MediaType type = ImageType.detect(avatar);
+
+        if (type == null) {
+            return ResponseEntity.notFound().build();
         }
 
-        return new byte[0];
+        return ResponseEntity.ok()
+                .contentType(type)
+                .header("X-Content-Type-Options", "nosniff")
+                .body(avatar);
     }
 
     @PostMapping("/profile/{id}/edit")

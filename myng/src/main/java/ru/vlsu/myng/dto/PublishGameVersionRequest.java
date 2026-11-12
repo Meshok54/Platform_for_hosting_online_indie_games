@@ -24,6 +24,11 @@ public class PublishGameVersionRequest {
     private String commitHash;
 
     @NotBlank(message = "Точка входа обязательна")
+    @Pattern(
+            regexp = "^(?!.*\\.\\.)[^\\\\?#<>\"']+\\.html?$",
+            flags = Pattern.Flag.CASE_INSENSITIVE,
+            message = "Точка входа — путь к HTML-файлу относительно корня репозитория"
+    )
     private String entryPoint;
 
     @NotBlank(

@@ -138,12 +138,29 @@ public class UserListService {
     @Transactional
     public void banUser(Integer userId, String reason, Integer durationHours, User moderator) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
+
+        if (user.getId().equals(moderator.getId())) {
+            throw new IllegalArgumentException("Нельзя заблокировать самого себя");
+        }
+
+        // иначе один администратор мог бы лишить доступа другого (или всех остальных)
+        if (user.getRole() == User.Role.admin) {
+            throw new IllegalArgumentException("Нельзя заблокировать администратора");
+        }
+
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new IllegalArgumentException("Укажите причину блокировки");
+        }
+
+        if (reason.length() > 255) {
+            throw new IllegalArgumentException("Причина блокировки не должна превышать 255 символов");
+        }
 
         boolean alreadyBanned = banRepository.existsByUser_IdAndStartTimeBeforeAndEndTimeAfter(
                 userId, Instant.now(), Instant.now());
         if (alreadyBanned) {
-            throw new RuntimeException("Пользователь уже заблокирован");
+            throw new IllegalArgumentException("Пользователь уже заблокирован");
         }
 
         Ban ban = new Ban();
@@ -187,14 +204,14 @@ public class UserListService {
     @Transactional
     public void unbanUser(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
         Instant now = Instant.now();
         boolean hasActiveBan = banRepository.existsByUser_IdAndStartTimeBeforeAndEndTimeAfter(
                 userId, now, now);
 
         if (!hasActiveBan) {
-            throw new RuntimeException("У пользователя нет активной блокировки");
+            throw new IllegalArgumentException("У пользователя нет активной блокировки");
         }
 
         List<Ban> userBans = banRepository.findByUser(user);
@@ -233,14 +250,14 @@ public class UserListService {
     @Transactional
     public void changeUserRole(Integer userId, User.Role newRole, User admin) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
         if (user.getId().equals(admin.getId())) {
-            throw new RuntimeException("Нельзя изменить свою собственную роль");
+            throw new IllegalArgumentException("Нельзя изменить свою собственную роль");
         }
 
         if (user.getRole() == newRole) {
-            throw new RuntimeException("У пользователя уже эта роль");
+            throw new IllegalArgumentException("У пользователя уже эта роль");
         }
 
         User.Role oldRole = user.getRole();
@@ -297,10 +314,10 @@ public class UserListService {
     @Transactional
     public void issueWarning(Integer userId, String reason, User moderator) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
         if (reason == null || reason.trim().isEmpty()) {
-            throw new RuntimeException("Причина предупреждения не может быть пустой");
+            throw new IllegalArgumentException("Причина предупреждения не может быть пустой");
         }
 
         Warning warning = new Warning();

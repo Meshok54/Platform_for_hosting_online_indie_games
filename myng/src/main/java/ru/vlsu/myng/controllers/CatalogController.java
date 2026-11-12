@@ -14,6 +14,7 @@ import ru.vlsu.myng.dto.CatalogGameDTO;
 import ru.vlsu.myng.dto.GameFilterDTO;
 import ru.vlsu.myng.entities.Game;
 import ru.vlsu.myng.services.GameService;
+import ru.vlsu.myng.utils.PageLimits;
 import ru.vlsu.myng.repositories.TagRepository;
 
 import java.util.List;
@@ -36,6 +37,9 @@ public class CatalogController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "6") int size,
             Model model) {
+
+        page = PageLimits.page(page);
+        size = PageLimits.size(size);
 
         GameFilterDTO filter = new GameFilterDTO();
         filter.setSearch(search);

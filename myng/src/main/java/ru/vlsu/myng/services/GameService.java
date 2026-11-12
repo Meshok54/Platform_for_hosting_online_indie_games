@@ -17,6 +17,7 @@ import ru.vlsu.myng.dto.GameEditRequestDTO;
 import ru.vlsu.myng.dto.GameFilterDTO;
 import ru.vlsu.myng.dto.GamePageDTO;
 import ru.vlsu.myng.utils.GithubException;
+import ru.vlsu.myng.utils.ImageType;
 import ru.vlsu.myng.utils.NotFoundException;
 
 import java.io.IOException;
@@ -62,6 +63,8 @@ public class GameService {
     private final UserService userService;
     private final TagService tagService;
     private final TagRepository tagRepository;
+
+    private static final String IMAGE_ERROR = "Обложка игры должна быть изображением PNG, JPEG, GIF или WebP";
 
     /**
      * Возвращает список всех игр указанного разработчика.
@@ -273,6 +276,24 @@ public class GameService {
     public Game getGameById(Integer id) {
         return gameRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Игра не найдена"));
+    }
+
+    /**
+     * Проверяет, опубликована ли игра: есть ли у неё версия, одобренная модератором.
+     *
+     * <p>
+     * Игра без одобренных версий (на модерации или отклонённая) не должна быть
+     * доступна игрокам: её страницу видят только разработчик и модераторы,
+     * и к ней нельзя оставить отзыв.
+     * </p>
+     *
+     * @param gameId идентификатор игры.
+     *
+     * @return true, если у игры есть одобренная версия.
+     */
+    @Transactional(readOnly = true)
+    public boolean isPublished(Integer gameId) {
+        return gameVersionRepository.existsApprovedByGameId(gameId);
     }
 
     /**
@@ -587,13 +608,23 @@ public class GameService {
         Game game = gameRepository.findById(gameId)
                 .orElseThrow(() -> new NotFoundException("Игра не найдена"));
 
+        // те же ограничения, что и при публикации игры (см. PublishGameRequest)
         if (request.getName() != null && !request.getName().isBlank()) {
-            game.setName(request.getName());
+            String name = request.getName().trim();
+            if (name.length() < 3 || name.length() > 100) {
+                throw new IllegalArgumentException("Название должно быть от 3 до 100 символов");
+            }
+            game.setName(name);
         }
-        game.setDescr(request.getDescription());
+
+        String description = request.getDescription() == null ? "" : request.getDescription().trim();
+        if (description.length() < 10 || description.length() > 2000) {
+            throw new IllegalArgumentException("Описание должно быть от 10 до 2000 символов");
+        }
+        game.setDescr(description);
 
         if (request.getImage() != null && !request.getImage().isEmpty()) {
-            game.setImage(request.getImage().getBytes());
+            game.setImage(ImageType.readImage(request.getImage(), IMAGE_ERROR));
         }
 
         gameRepository.save(game);
@@ -717,16 +748,11 @@ public class GameService {
         game.setName(dto.getTitle());
         game.setDescr(dto.getDescription());
         game.setRepo(repoLink);
-        try {
-            var file = dto.getMainPic();
-            if (file != null && !file.isEmpty() && file.getSize() > 0) {
-                game.setImage(file.getBytes());
-            } else {
-                game.setImage(null);
-            }
-        } catch (IOException e) {
-            // раньше здесь был молчаливый return: игра не сохранялась, а клиент получал «успех»
-            throw new IllegalStateException("Не удалось прочитать загруженное изображение", e);
+        var file = dto.getMainPic();
+        if (file != null && !file.isEmpty() && file.getSize() > 0) {
+            game.setImage(ImageType.readImage(file, IMAGE_ERROR));
+        } else {
+            game.setImage(null);
         }
 
         game.setGenre(

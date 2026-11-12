@@ -43,6 +43,7 @@ public class PublishGameRequest {
     )
     private String entryPoint;
     
+    @NotBlank(message = "Укажите файлы игры")
     @Pattern(
             regexp = "^([a-zA-Z0-9_\\-./]+)(,\\s*[a-zA-Z0-9_\\-./]+)*$",
             message = "Введите названия файлов и папок в формате: file.ext, folder, dir/file.ext"
@@ -64,6 +65,7 @@ public class PublishGameRequest {
     private String gameVer;
 
     //@FileNotEmpty
-    @MaxFileSize(value = 32 * 1024 * 1024, message = "Максимальный размер файла — 32MB")
+    // совпадает с spring.servlet.multipart.max-file-size
+    @MaxFileSize(value = 5 * 1024 * 1024, message = "Максимальный размер файла — 5MB")
     private MultipartFile mainPic;
 }

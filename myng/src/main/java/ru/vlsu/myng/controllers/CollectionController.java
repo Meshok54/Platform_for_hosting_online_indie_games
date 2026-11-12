@@ -5,6 +5,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import ru.vlsu.myng.dto.CreateCollectionDto;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.entities.Collection;
@@ -23,18 +24,29 @@ public class CollectionController {
     private final UserService userService;
 
     @GetMapping("/user/{userId}")
-    public String userCollections(@PathVariable Integer userId, Model model) {
+    public String userCollections(@PathVariable Integer userId, Model model, Principal principal) {
 
-        model.addAttribute("user", userService.findById(userId));
+        // коллекции личные: посмотреть можно только свои
+        User currentUser = userService.findByEmail(principal.getName());
+        if (!currentUser.getId().equals(userId)) {
+            throw new AccessDeniedException("Можно просматривать только свои коллекции");
+        }
+
+        model.addAttribute("user", currentUser);
         model.addAttribute("collections", collectionService.getUserCollections(userId));
 
         return "fragments/collections :: collectionsFragment";
     }
 
     @GetMapping("/{collectionId}")
-    public String collectionDetails(@PathVariable Integer collectionId, Model model) {
+    public String collectionDetails(@PathVariable Integer collectionId, Model model, Principal principal) {
 
         Collection collection = collectionService.getCollection(collectionId);
+
+        User currentUser = userService.findByEmail(principal.getName());
+        if (!collection.getUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Можно просматривать только свои коллекции");
+        }
 
         model.addAttribute("collection", collection);
         model.addAttribute("games", collectionService.getCollectionGames(collectionId));

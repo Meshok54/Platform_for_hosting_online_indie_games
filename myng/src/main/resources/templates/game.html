@@ -946,10 +946,17 @@
           const versionDate = selectedOption.getAttribute("data-date");
 
           if (changelogContainer) {
-            changelogContainer.innerHTML = `
-              <span class="font-medium text-gray-700">${versionName} — ${versionDate}</span>
-              <p class="text-gray-600 text-xs mt-1">${changelog}</p>
-            `;
+            // Текст changelog пишет разработчик игры, поэтому он вставляется
+            // только через textContent: innerHTML выполнил бы HTML из него (XSS)
+            const title = document.createElement("span");
+            title.className = "font-medium text-gray-700";
+            title.textContent = `${versionName} — ${versionDate}`;
+
+            const text = document.createElement("p");
+            text.className = "text-gray-600 text-xs mt-1";
+            text.textContent = changelog;
+
+            changelogContainer.replaceChildren(title, text);
           }
 
           const newUrl = `/running-game/${versionId}`;
@@ -1011,7 +1018,8 @@
                   method: "POST",
                 });
 
-                if (response.ok) {
+                // 409 — сервер сообщает, что жалоба от этого пользователя уже есть
+                if (response.ok || response.status === 409) {
                   saveReport(reviewId);
                   setReportedState(btn);
                 }

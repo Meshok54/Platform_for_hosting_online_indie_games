@@ -18,6 +18,7 @@ import ru.vlsu.myng.dto.WarningRequest;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.services.UserListService;
 import ru.vlsu.myng.services.UserService;
+import ru.vlsu.myng.utils.PageLimits;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,6 +39,9 @@ public class UserListController {
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String status,
             Model model) {
+
+        page = PageLimits.page(page);
+        size = PageLimits.size(size);
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("registeredAt").descending());
 
@@ -73,6 +77,10 @@ public class UserListController {
         return "user_list";
     }
 
+    // В методах ниже перехватываются только ошибки проверки данных — их текст написан
+    // для пользователя. Остальные исключения (например, ошибки БД) обрабатывает
+    // GlobalExceptionHandler, не раскрывая клиенту внутренние сообщения.
+
     /**
      * Блокировка пользователя (AJAX запрос).
      * Возвращает JSON с результатом.
@@ -94,7 +102,7 @@ public class UserListController {
 
             response.put("success", true);
             response.put("message", "Пользователь заблокирован");
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             response.put("success", false);
             response.put("message", e.getMessage());
         }
@@ -114,7 +122,7 @@ public class UserListController {
             userListService.unbanUser(request.getUserId());
             response.put("success", true);
             response.put("message", "Пользователь разблокирован");
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             response.put("success", false);
             response.put("message", e.getMessage());
         }
@@ -138,7 +146,7 @@ public class UserListController {
 
             response.put("success", true);
             response.put("message", "Роль пользователя успешно изменена");
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             response.put("success", false);
             response.put("message", e.getMessage());
         }
@@ -162,7 +170,7 @@ public class UserListController {
 
             response.put("success", true);
             response.put("message", "Предупреждение выдано");
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             response.put("success", false);
             response.put("message", e.getMessage());
         }

@@ -13,9 +13,11 @@ import ru.vlsu.myng.entities.Game;
 import ru.vlsu.myng.entities.ModerationVerdict;
 import ru.vlsu.myng.entities.Notification;
 import ru.vlsu.myng.entities.Review;
+import ru.vlsu.myng.entities.ReviewReport;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.ModerationVerdictRepository;
 import ru.vlsu.myng.repositories.NotificationRepository;
+import ru.vlsu.myng.repositories.ReviewReportRepository;
 import ru.vlsu.myng.repositories.ReviewRepository;
 import ru.vlsu.myng.repositories.UserRepository;
 import ru.vlsu.myng.utils.NotFoundException;
@@ -33,6 +35,7 @@ public class ReviewService {
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
     private final ModerationVerdictRepository verdictRepository;
+    private final ReviewReportRepository reportRepository;
 
     /**
      * Количество жалоб, после которого отзыв скрывается и отправляется на модерацию.
@@ -336,6 +339,48 @@ public class ReviewService {
         addToGameRating(review);
 
         return reviewRepository.save(review);
+    }
+
+    /**
+     * Принимает жалобу пользователя на отзыв.
+     *
+     * <p>
+     * Один пользователь может пожаловаться на отзыв только один раз: жалоба
+     * сохраняется в таблице {@code review_report}, и проверка идёт на сервере.
+     * Раньше повтор отсекался только в браузере (localStorage), поэтому один
+     * человек мог десятью запросами скрыть любой чужой отзыв.
+     * </p>
+     *
+     * @param reviewId идентификатор отзыва.
+     * @param reporter пользователь, который жалуется.
+     *
+     * @return true, если жалоба принята; false, если этот пользователь
+     *         уже жаловался на этот отзыв.
+     *
+     * @throws NotFoundException        если отзыв не найден
+     * @throws IllegalArgumentException если пользователь жалуется на свой отзыв
+     */
+    @Transactional
+    public boolean reportReview(Integer reviewId, User reporter) {
+        Review review = getReviewById(reviewId);
+
+        if (review.getUser().getId().equals(reporter.getId())) {
+            throw new IllegalArgumentException("Нельзя жаловаться на свой отзыв");
+        }
+
+        if (reportRepository.existsByReviewAndUser(review, reporter)) {
+            return false;
+        }
+
+        ReviewReport report = new ReviewReport();
+        report.setReview(review);
+        report.setUser(reporter);
+        report.setCreatedAt(Instant.now());
+        reportRepository.save(report);
+
+        incrementReportCount(reviewId);
+
+        return true;
     }
 
     /**

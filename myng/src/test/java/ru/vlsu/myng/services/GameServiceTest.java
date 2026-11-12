@@ -142,7 +142,8 @@ class GameServiceTest extends BaseIntegrationTest {
                 "image",
                 "cover.jpg",
                 "image/jpeg",
-                "fake-image".getBytes(StandardCharsets.UTF_8));
+                // сигнатура JPEG: тип обложки проверяется по содержимому файла
+                new byte[] { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0 });
 
         PublishGameRequest request = new PublishGameRequest();
 

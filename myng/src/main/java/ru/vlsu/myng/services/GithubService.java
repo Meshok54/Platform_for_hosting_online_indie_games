@@ -93,8 +93,9 @@ public class GithubService {
         this.webClient = builder
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl("https://api.github.com")
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + githubToken)
                 .defaultHeader(HttpHeaders.USER_AGENT, "MyNG")
+                // токен подставляется в момент запроса: в конструкторе поле githubToken
+                // ещё не заполнено (@Value внедряется после создания объекта)
                 .filter((request, next) -> {
                     String token = githubToken;
                     ClientRequest newRequest = ClientRequest.from(request)

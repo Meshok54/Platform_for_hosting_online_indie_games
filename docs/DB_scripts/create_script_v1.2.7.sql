@@ -168,6 +168,20 @@ CREATE TABLE `review` (
   CONSTRAINT `chk_review_rating` CHECK ((`rating` between 1 and 5))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Жалобы на отзывы: один пользователь может пожаловаться на отзыв только один раз
+DROP TABLE IF EXISTS `review_report`;
+CREATE TABLE `review_report` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `fk_review` int NOT NULL,
+  `fk_user` int NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_review_report` (`fk_review`,`fk_user`),
+  KEY `fk_review_report_user` (`fk_user`),
+  CONSTRAINT `fk_review_report_review` FOREIGN KEY (`fk_review`) REFERENCES `review` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_review_report_user` FOREIGN KEY (`fk_user`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP TABLE IF EXISTS `tag`;
 CREATE TABLE `tag` (
   `id` int NOT NULL AUTO_INCREMENT,

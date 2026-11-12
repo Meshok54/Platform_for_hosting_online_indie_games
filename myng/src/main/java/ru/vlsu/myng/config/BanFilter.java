@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import ru.vlsu.myng.entities.User;
@@ -45,6 +46,21 @@ public class BanFilter extends OncePerRequestFilter
             User user = userRepository.findByEmail(email).orElse(null);
 
             if (user != null) {
+
+                // Роль хранится в сессии с момента входа. Если администратор её изменил,
+                // старая сессия продолжала бы работать с прежними правами (например,
+                // разжалованный модератор оставался бы модератором до выхода).
+                // Поэтому при расхождении сессия завершается и нужен повторный вход.
+                String actualAuthority = "ROLE_" + user.getRole().name().toUpperCase();
+
+                boolean roleChanged = auth.getAuthorities().stream()
+                        .noneMatch(a -> a.getAuthority().equals(actualAuthority));
+
+                if (roleChanged) {
+                    new SecurityContextLogoutHandler().logout(request, response, auth);
+                    response.sendRedirect("/auth");
+                    return;
+                }
 
                 boolean banned =
                         banRepository

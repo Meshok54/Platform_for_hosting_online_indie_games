@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -39,8 +42,6 @@ public class GameController {
             GamePageDTO game = gameService.getGamePageData(id);
             model.addAttribute("game", game);
 
-            gameService.incrementGameTotalViews(id);
-
             User currentUser = null;
             boolean isAuthenticated = false;
             List<CollectionDTO> userCollections = null;
@@ -60,6 +61,18 @@ public class GameController {
                     game.getDeveloper() != null &&
                     currentUser.getId().equals(game.getDeveloper().getId());
 
+            // Игру без одобренных версий (на модерации или отклонённую) видят только
+            // её разработчик и модераторы; для остальных такой страницы нет
+            boolean isPublished = !game.getVersions().isEmpty();
+
+            if (!isPublished && !isDeveloper && !isModerator(principal)) {
+                return "redirect:/";
+            }
+
+            if (isPublished) {
+                gameService.incrementGameTotalViews(id);
+            }
+
             boolean hasUserReviewed = false;
             if (isAuthenticated && currentUser != null) {
                 Game gameEntity = gameService.getGameById(id);
@@ -77,6 +90,13 @@ public class GameController {
             log.warn("Не удалось открыть страницу игры {}", id, e);
             return "redirect:/";
         }
+    }
+
+    private boolean isModerator(Principal principal) {
+        return principal instanceof Authentication authentication
+                && authentication.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .anyMatch(a -> a.equals("ROLE_MOD") || a.equals("ROLE_ADMIN"));
     }
 
     @PostMapping("/{id}/edit")
@@ -106,8 +126,14 @@ public class GameController {
     }
 
     @GetMapping("/developer/{userId}")
-    public String getDeveloperGames(@PathVariable Integer userId, Model model) {
-        var user = userService.findById(userId);
+    public String getDeveloperGames(@PathVariable Integer userId, Model model, Principal principal) {
+        // список включает неопубликованные игры и статус модерации — он только для владельца
+        User currentUser = userService.findByEmail(principal.getName());
+        if (!currentUser.getId().equals(userId)) {
+            throw new AccessDeniedException("Можно просматривать только свои игры");
+        }
+
+        var user = currentUser;
         List<MyGame> games = gameService.getGamesForUser(user);
         model.addAttribute("mygames", games);
         return "fragments/my_games :: myGamesFragment";

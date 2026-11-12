@@ -12,7 +12,8 @@ import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.UserRepository;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
+import ru.vlsu.myng.utils.ImageType;
+
 import java.time.Instant;
 
 /**
@@ -62,7 +63,7 @@ public class UserService {
      *
      * @return созданный пользователь.
      *
-     * @throws RuntimeException если данные некорректны
+     * @throws IllegalArgumentException если данные некорректны
      *                          или пользователь/почта уже существуют
      * @throws org.springframework.dao.DataAccessException
      *                          при ошибке доступа к базе данных
@@ -70,21 +71,21 @@ public class UserService {
     @Transactional
     public User registerNewUser(UserRegistrationDto registrationDto) {
         if (!registrationDto.isPasswordConfirmed()) {
-            throw new RuntimeException("Пароли не совпадают");
+            throw new IllegalArgumentException("Пароли не совпадают");
         }
 
         if (registrationDto.getPassword() == null || registrationDto.getPassword().length() < 6) {
-            throw new RuntimeException("Пароль должен быть не менее 6 символов");
+            throw new IllegalArgumentException("Пароль должен быть не менее 6 символов");
         }
 
         validateUsername(registrationDto.getUsername());
 
         if (userRepository.existsByUsername(registrationDto.getUsername())) {
-            throw new RuntimeException("Имя пользователя уже занято");
+            throw new IllegalArgumentException("Имя пользователя уже занято");
         }
 
         if (userRepository.existsByEmail(registrationDto.getEmail())) {
-            throw new RuntimeException("Email уже используется");
+            throw new IllegalArgumentException("Email уже используется");
         }
 
         User user = new User();
@@ -217,16 +218,9 @@ public class UserService {
         }
 
         if (avatar != null && !avatar.isEmpty()) {
-            String contentType = avatar.getContentType();
-            if (contentType == null || !contentType.startsWith("image/")) {
-                throw new IllegalArgumentException("Аватар должен быть изображением");
-            }
-
-            try {
-                user.setProfilePic(avatar.getBytes());
-            } catch (IOException e) {
-                throw new IllegalStateException("Не удалось прочитать файл аватара", e);
-            }
+            // тип проверяется по содержимому файла: заголовок Content-Type задаёт клиент,
+            // и под видом картинки можно было бы загрузить HTML со скриптом
+            user.setProfilePic(ImageType.readImage(avatar, "Аватар должен быть изображением"));
         }
 
         user.setUsername(newUsername);

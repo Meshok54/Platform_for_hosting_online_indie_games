@@ -1,6 +1,7 @@
 package ru.vlsu.myng.controllers;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import ru.vlsu.myng.dto.ReviewUpdate;
 import ru.vlsu.myng.entities.Game;
 import ru.vlsu.myng.entities.Review;
@@ -20,7 +21,9 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import ru.vlsu.myng.services.GameService;
 import ru.vlsu.myng.services.ReviewService;
 import ru.vlsu.myng.services.UserService;
+import ru.vlsu.myng.utils.PageLimits;
 
+@Slf4j
 @Controller
 @RequestMapping("/reviews")
 @RequiredArgsConstructor
@@ -67,6 +70,12 @@ public class ReviewController {
                 return "redirect:/auth";
             }
 
+            // отзыв можно оставить только к опубликованной игре
+            if (!gameService.isPublished(id)) {
+                redirectAttributes.addFlashAttribute("error", "Игра ещё не опубликована");
+                return "redirect:/";
+            }
+
             if (game.getDeveloper().getId().equals(currentUser.getId())) {
                 redirectAttributes.addFlashAttribute("error", "Разработчик не может оставлять отзывы к своей игре");
                 return "redirect:/games/" + id;
@@ -91,7 +100,9 @@ public class ReviewController {
             redirectAttributes.addFlashAttribute("success", "Отзыв успешно добавлен!");
 
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "Ошибка при добавлении отзыва: " + e.getMessage());
+            // текст исключения пользователю не показываем: в нём могут быть внутренние детали
+            log.warn("Не удалось добавить отзыв к игре {}", id, e);
+            redirectAttributes.addFlashAttribute("error", "Не удалось добавить отзыв. Попробуйте позже");
         }
 
         return "redirect:/games/" + id;
@@ -102,6 +113,8 @@ public class ReviewController {
             @RequestParam(defaultValue = "1") int page,
             Model model,
             Principal principal) {
+        page = PageLimits.page(page);
+
         Game game = gameService.getGameById(id);
         List<Review> moreReviews = reviewService.findByGameOrderByCreatedAtDesc(
                 game,
@@ -123,13 +136,11 @@ public class ReviewController {
         }
 
         User currentUser = userService.findByEmail(principal.getName());
-        Review review = reviewService.getReviewById(reviewId);
 
-        if (review.getUser().getId().equals(currentUser.getId())) {
-            return ResponseEntity.badRequest().body("Нельзя жаловаться на свой отзыв");
+        // повторная жалоба того же пользователя не засчитывается (проверка на сервере)
+        if (!reviewService.reportReview(reviewId, currentUser)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Вы уже жаловались на этот отзыв");
         }
-
-        reviewService.incrementReportCount(reviewId);
 
         return ResponseEntity.ok().build();
     }

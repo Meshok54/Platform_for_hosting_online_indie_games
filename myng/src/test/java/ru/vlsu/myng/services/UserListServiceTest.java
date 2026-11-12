@@ -209,6 +209,42 @@ class UserListServiceTest extends BaseIntegrationTest {
     }
 
     @Test
+    void banUser_shouldRejectBanningYourself() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            userListService.banUser(moderator.getId(), "Причина", 24, moderator);
+        });
+
+        assertThat(exception.getMessage()).isEqualTo("Нельзя заблокировать самого себя");
+        assertThat(banRepository.findByUser(moderator)).isEmpty();
+    }
+
+    @Test
+    void banUser_shouldRejectBanningAnotherAdmin() {
+        User otherAdmin = new User();
+        otherAdmin.setUsername("second_admin");
+        otherAdmin.setEmail("admin2@mail.com");
+        otherAdmin.setPasswordHash("hash");
+        otherAdmin.setRole(User.Role.admin);
+        userRepository.save(otherAdmin);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            userListService.banUser(otherAdmin.getId(), "Причина", 24, moderator);
+        });
+
+        assertThat(exception.getMessage()).isEqualTo("Нельзя заблокировать администратора");
+        assertThat(banRepository.findByUser(otherAdmin)).isEmpty();
+    }
+
+    @Test
+    void banUser_shouldRejectEmptyReason() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            userListService.banUser(targetUser.getId(), "   ", 24, moderator);
+        });
+
+        assertThat(banRepository.findByUser(targetUser)).isEmpty();
+    }
+
+    @Test
     void issueWarning_shouldThrowException_whenReasonIsEmpty() {
         assertThrows(RuntimeException.class, () -> {
             userListService.issueWarning(targetUser.getId(), "   ", moderator);

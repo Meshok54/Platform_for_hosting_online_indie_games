@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import ru.vlsu.myng.dto.ModerationItem;
 import ru.vlsu.myng.services.ModerationLogService;
 import ru.vlsu.myng.services.ModerationVerdictService;
+import ru.vlsu.myng.utils.PageLimits;
 
 @Controller
 @RequiredArgsConstructor
@@ -36,6 +37,9 @@ public class ToModerateController {
                         @RequestParam(defaultValue = "newest") String sort,
 
                         Model model) {
+
+                page = PageLimits.page(page);
+                size = PageLimits.size(size);
 
                 Sort sorting = sort.equals("oldest")
                                 ? JpaSort.unsafe(Sort.Direction.ASC,

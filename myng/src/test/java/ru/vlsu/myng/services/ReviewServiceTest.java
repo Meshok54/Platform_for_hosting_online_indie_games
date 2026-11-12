@@ -14,9 +14,11 @@ import ru.vlsu.myng.entities.Game;
 import ru.vlsu.myng.entities.ModerationVerdict;
 import ru.vlsu.myng.entities.Notification;
 import ru.vlsu.myng.entities.Review;
+import ru.vlsu.myng.entities.ReviewReport;
 import ru.vlsu.myng.entities.User;
 import ru.vlsu.myng.repositories.ModerationVerdictRepository;
 import ru.vlsu.myng.repositories.NotificationRepository;
+import ru.vlsu.myng.repositories.ReviewReportRepository;
 import ru.vlsu.myng.repositories.ReviewRepository;
 
 import java.util.Optional;
@@ -35,6 +37,9 @@ class ReviewServiceTest {
 
     @Mock
     private ModerationVerdictRepository verdictRepository;
+
+    @Mock
+    private ReviewReportRepository reportRepository;
 
     @InjectMocks
     private ReviewService reviewService;
@@ -466,5 +471,70 @@ class ReviewServiceTest {
         assertEquals(10, game.getRatingSum());
         assertEquals(3, game.getReviewCount());
         verify(reviewRepository).save(review);
+    }
+
+    // ==========================================
+    // ТЕСТЫ ДЛЯ МЕТОДА reportReview()
+    // ==========================================
+
+    private Review reviewBy(User author) {
+        Review review = new Review();
+        review.setId(80);
+        review.setUser(author);
+        review.setGame(new Game());
+        review.setRating((byte) 4);
+        review.setReportCount(0);
+        return review;
+    }
+
+    private User userWithId(int id) {
+        User user = new User();
+        user.setId(id);
+        return user;
+    }
+
+    @Test
+    void reportReview_ShouldSaveReportAndIncrementCounter_OnFirstReport() {
+        Review review = reviewBy(userWithId(1));
+        User reporter = userWithId(2);
+
+        when(reviewRepository.findById(80)).thenReturn(Optional.of(review));
+        when(reportRepository.existsByReviewAndUser(review, reporter)).thenReturn(false);
+
+        assertTrue(reviewService.reportReview(80, reporter));
+
+        ArgumentCaptor<ReviewReport> captor = ArgumentCaptor.forClass(ReviewReport.class);
+        verify(reportRepository).save(captor.capture());
+        assertSame(review, captor.getValue().getReview());
+        assertSame(reporter, captor.getValue().getUser());
+        assertEquals(1, review.getReportCount());
+    }
+
+    @Test
+    void reportReview_ShouldNotCountSecondReport_FromSameUser() {
+        Review review = reviewBy(userWithId(1));
+        review.setReportCount(1);
+        User reporter = userWithId(2);
+
+        when(reviewRepository.findById(80)).thenReturn(Optional.of(review));
+        when(reportRepository.existsByReviewAndUser(review, reporter)).thenReturn(true);
+
+        assertFalse(reviewService.reportReview(80, reporter));
+
+        assertEquals(1, review.getReportCount(), "Повторная жалоба не должна увеличивать счётчик");
+        verify(reportRepository, never()).save(any());
+    }
+
+    @Test
+    void reportReview_ShouldRejectReportOnOwnReview() {
+        User author = userWithId(1);
+        Review review = reviewBy(author);
+
+        when(reviewRepository.findById(80)).thenReturn(Optional.of(review));
+
+        assertThrows(IllegalArgumentException.class, () -> reviewService.reportReview(80, author));
+
+        assertEquals(0, review.getReportCount());
+        verifyNoInteractions(reportRepository);
     }
 }

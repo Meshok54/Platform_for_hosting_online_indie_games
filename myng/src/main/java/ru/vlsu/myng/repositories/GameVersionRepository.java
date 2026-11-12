@@ -2,6 +2,7 @@ package ru.vlsu.myng.repositories;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import ru.vlsu.myng.entities.GameVersion;
 import ru.vlsu.myng.entities.Game;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -159,4 +160,20 @@ public interface GameVersionRepository extends JpaRepository<GameVersion, Intege
         ORDER BY gv.createdAt DESC
         """)
     List<GameVersion> findLatestApproved(Pageable pageable);
+
+    /**
+     * Проверяет, есть ли у игры хотя бы одна версия, одобренная модератором.
+     * Только такие игры считаются опубликованными и видны игрокам.
+     *
+     * @param gameId идентификатор игры.
+     *
+     * @return true, если у игры есть одобренная версия.
+     */
+    @Query("""
+            SELECT COUNT(gv) > 0
+            FROM GameVersion gv
+            WHERE gv.game.id = :gameId
+            AND gv.moderationVerdict.approved = true
+            """)
+    boolean existsApprovedByGameId(@Param("gameId") Integer gameId);
 }

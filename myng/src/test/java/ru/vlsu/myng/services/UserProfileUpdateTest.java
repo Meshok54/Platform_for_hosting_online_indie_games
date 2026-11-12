@@ -96,7 +96,8 @@ class UserProfileUpdateTest {
     @Test
     void updateProfile_ShouldRejectNonImageAvatar() {
         MockMultipartFile script = new MockMultipartFile(
-                "avatar", "evil.html", "text/html", "<script>alert(1)</script>".getBytes());
+                // заголовок «image/png» подделан — тип должен определяться по содержимому
+                "avatar", "evil.png", "image/png", "<script>alert(1)</script>".getBytes());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> userService.updateProfile(user, "player", "", script));
@@ -107,7 +108,7 @@ class UserProfileUpdateTest {
 
     @Test
     void updateProfile_ShouldAcceptImageAvatar() {
-        byte[] png = { (byte) 0x89, 'P', 'N', 'G' };
+        byte[] png = { (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A };
         MockMultipartFile avatar = new MockMultipartFile("avatar", "me.png", "image/png", png);
         when(userRepository.save(user)).thenReturn(user);
 
